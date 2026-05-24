@@ -16,7 +16,7 @@ an empty building state rendering correctly.
 
 ### Tasks
 
-1. Scaffold the project with `npm create vite@latest office-navigator -- --template react-ts`
+1. Scaffold the project with `npm create vite@latest . -- --template react-ts` (directly into the repo root)
 2. Delete all boilerplate content (App.css, default App.tsx content, etc.)
 3. Create `src/types/graph.ts` with all interfaces exactly as specified in CLAUDE.md:
    `EdgeType`, `Building`, `Section`, `Node`, `Edge`
