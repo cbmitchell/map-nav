@@ -1,0 +1,168 @@
+import { useState, useEffect, useMemo } from 'react';
+import type { EdgeType } from '../../types/graph';
+import { useGraphReducer } from '../../hooks/useGraphReducer';
+import { usePathfinder } from '../../hooks/usePathfinder';
+import { useZoomPan, DEFAULT_ZOOM_PAN } from '../../hooks/useZoomPan';
+import type { ZoomPanState } from '../../hooks/useZoomPan';
+import { useRef } from 'react';
+import { NavigatorControls } from './NavigatorControls';
+import { NavigatorCanvas } from './NavigatorCanvas';
+import { DirectionsPanel } from './DirectionsPanel';
+
+export function Navigator() {
+  const { state } = useGraphReducer();
+  const [srcId, setSrcId] = useState<string | null>(null);
+  const [tgtId, setTgtId] = useState<string | null>(null);
+  const [accessibleOnly, setAccessibleOnly] = useState(false);
+  const [showDirections, setShowDirections] = useState(false);
+  const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
+  const { zoomPan, handleWheel, pan, zoomAt, setView } = useZoomPan();
+
+  // Per-section zoom for navigator (same pattern as editor)
+  const zoomPerSection = useRef<Record<string, ZoomPanState>>({});
+  const zoomPanRef = useRef(zoomPan);
+  zoomPanRef.current = zoomPan;
+
+  const excludedTypes = useMemo<Set<EdgeType>>(
+    () => (accessibleOnly ? new Set<EdgeType>(['stairs']) : new Set<EdgeType>()),
+    [accessibleOnly],
+  );
+
+  const { path, error } = usePathfinder(state, srcId, tgtId, excludedTypes);
+
+  // When origin changes, switch view to its section
+  useEffect(() => {
+    if (!srcId) return;
+    const srcNode = state.nodes.find((n) => n.id === srcId);
+    if (srcNode) switchSection(srcNode.sectionId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [srcId]);
+
+  // Ordered list of sections that the path visits (deduplicated, in order)
+  const pathSections = useMemo(() => {
+    if (!path) return [];
+    const nodeIndex = new Map(state.nodes.map((n) => [n.id, n]));
+    const sections: string[] = [];
+    for (const nodeId of path) {
+      const node = nodeIndex.get(nodeId);
+      if (node && (sections.length === 0 || sections[sections.length - 1] !== node.sectionId)) {
+        sections.push(node.sectionId);
+      }
+    }
+    return sections;
+  }, [path, state.nodes]);
+
+  const switchSection = (newId: string) => {
+    if (activeSectionId) {
+      zoomPerSection.current[activeSectionId] = zoomPanRef.current;
+    }
+    setActiveSectionId(newId);
+    setView(zoomPerSection.current[newId] ?? DEFAULT_ZOOM_PAN);
+  };
+
+  const currentPathSectionIndex = pathSections.indexOf(activeSectionId ?? '');
+  const canStepPrev = currentPathSectionIndex > 0;
+  const canStepNext = currentPathSectionIndex < pathSections.length - 1 && currentPathSectionIndex !== -1;
+
+  return (
+    <div style={styles.navigator}>
+      <NavigatorControls
+        building={state}
+        srcId={srcId}
+        tgtId={tgtId}
+        accessibleOnly={accessibleOnly}
+        showDirections={showDirections}
+        error={error}
+        onSrcChange={setSrcId}
+        onTgtChange={setTgtId}
+        onAccessibleToggle={setAccessibleOnly}
+        onDirectionsToggle={setShowDirections}
+      />
+
+      {/* Multi-section step indicator */}
+      {pathSections.length > 1 && (
+        <div style={styles.stepBar}>
+          <button
+            style={{ ...styles.stepBtn, ...(!canStepPrev ? styles.stepBtnDisabled : {}) }}
+            disabled={!canStepPrev}
+            onClick={() => switchSection(pathSections[currentPathSectionIndex - 1])}
+          >
+            ← Prev
+          </button>
+          <span style={styles.stepLabel}>
+            {state.sections.find((s) => s.id === activeSectionId)?.name ?? '—'}
+            {' '}
+            <span style={styles.stepCount}>
+              ({currentPathSectionIndex === -1 ? '?' : currentPathSectionIndex + 1}/{pathSections.length})
+            </span>
+          </span>
+          <button
+            style={{ ...styles.stepBtn, ...(!canStepNext ? styles.stepBtnDisabled : {}) }}
+            disabled={!canStepNext}
+            onClick={() => switchSection(pathSections[currentPathSectionIndex + 1])}
+          >
+            Next →
+          </button>
+        </div>
+      )}
+
+      <div style={styles.canvasArea}>
+        <NavigatorCanvas
+          building={state}
+          activeSectionId={activeSectionId}
+          path={path}
+          zoomPan={zoomPan}
+          onWheel={handleWheel}
+          onPan={pan}
+          onZoomAt={zoomAt}
+        />
+      </div>
+
+      {showDirections && path && path.length > 0 && (
+        <DirectionsPanel building={state} path={path} />
+      )}
+    </div>
+  );
+}
+
+const styles: Record<string, React.CSSProperties> = {
+  navigator: {
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
+  },
+  stepBar: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '6px 14px',
+    background: '#111',
+    borderBottom: '1px solid #2a2a2a',
+    flexShrink: 0,
+  },
+  stepBtn: {
+    padding: '3px 12px',
+    background: 'transparent',
+    border: '1px solid #444',
+    borderRadius: 4,
+    color: '#ccc',
+    cursor: 'pointer',
+    fontSize: 12,
+  },
+  stepBtnDisabled: {
+    opacity: 0.35,
+    cursor: 'not-allowed',
+  },
+  stepLabel: {
+    fontSize: 13,
+    color: '#ddd',
+  },
+  stepCount: {
+    fontSize: 11,
+    color: '#666',
+  },
+  canvasArea: {
+    flex: 1,
+    overflow: 'auto',
+  },
+};

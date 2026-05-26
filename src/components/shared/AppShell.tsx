@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { Editor } from '../Editor/Editor';
+import { Navigator } from '../Navigator/Navigator';
+import { ErrorBoundary } from './ErrorBoundary';
 
 type AppMode = 'editor' | 'navigator';
 
@@ -26,9 +29,13 @@ export function AppShell() {
       </header>
       <main style={styles.main}>
         {mode === 'editor' ? (
-          <div style={styles.placeholder}>Editor (coming soon)</div>
+          <ErrorBoundary label="Editor">
+            <Editor />
+          </ErrorBoundary>
         ) : (
-          <div style={styles.placeholder}>Navigator (coming soon)</div>
+          <ErrorBoundary label="Navigator">
+            <Navigator />
+          </ErrorBoundary>
         )}
       </main>
     </div>
@@ -77,13 +84,5 @@ const styles: Record<string, React.CSSProperties> = {
   main: {
     flex: 1,
     overflow: 'hidden',
-  },
-  placeholder: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100%',
-    color: '#555',
-    fontSize: 18,
   },
 };

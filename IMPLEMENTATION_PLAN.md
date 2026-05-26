@@ -142,6 +142,11 @@ connecting them.
 
 2. Implement `ADD_SECTION` and `UPDATE_SECTION_IMAGE` reducer actions
 
+3. **PDF multi-page import:** When the user uploads a multi-page PDF via "Add section",
+   use `getPageCount()` from `src/utils/pdf.ts` to detect the page count. If > 1, offer
+   to import all pages as separate sections automatically (one section per page), using
+   `renderPdfPage(file, pageNum)` for each. Single-page PDFs behave as today (page 1 only).
+
 3. Implement cross-section link mode in `EditorCanvas.tsx`:
    - When in `edge` mode and the user clicks a node that is `isConnector: true`, check
      if the intended target would be in a different section
