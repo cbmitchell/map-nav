@@ -276,13 +276,11 @@ export function useCanvasRenderer(
     };
 
     if (isPathMode) {
-      ctx.globalAlpha = DIM_ALPHA;
-      for (const node of sectionNodes) {
-        if (!pathNodeSet!.has(node.id)) drawNode(node, false);
-      }
+      const isSignificantNode = (n: typeof sectionNodes[number]) =>
+        n.isRoom || n.isConnector || n.label !== '';
       ctx.globalAlpha = 1;
       for (const node of sectionNodes) {
-        if (pathNodeSet!.has(node.id)) drawNode(node, true);
+        if (pathNodeSet!.has(node.id) && isSignificantNode(node)) drawNode(node, true);
       }
     } else {
       for (const node of sectionNodes) drawNode(node, false);
