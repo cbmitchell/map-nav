@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { dijkstra } from './pathfinding';
+import { dijkstra, dijkstraToCategory } from './pathfinding';
 import type { Node, Edge } from '../types/graph';
 
 // ---------------------------------------------------------------------------
 // Test graph helpers
 // ---------------------------------------------------------------------------
 
-function node(id: string): Node {
-  return { id, sectionId: 's1', nx: 0, ny: 0, label: '', isRoom: false, isConnector: false };
+function node(id: string, opts: Partial<Node> = {}): Node {
+  return { id, sectionId: 's1', nx: 0, ny: 0, label: '', isRoom: false, isConnector: false, ...opts };
 }
 
 function edge(id: string, srcId: string, tgtId: string, weight: number, type: Edge['type'] = 'walkway'): Edge {
@@ -95,5 +95,53 @@ describe('dijkstra', () => {
     const crossEdge: Edge = { id: 'cross', srcId: 'B', tgtId: 'C', type: 'elevator', weight: 300, crossSection: true };
     const edges = [edge('e1', 'A', 'B', 10), crossEdge, edge('e2', 'C', 'D', 10)];
     expect(dijkstra(nodes, edges, 'A', 'D', new Set(['elevator']))).toBeNull();
+  });
+});
+
+describe('dijkstraToCategory', () => {
+  it('routes to the nearest room in the category', () => {
+    //  A --1-- B(bathroom, dist=1)
+    //  A --5-- C(bathroom, dist=5)
+    const nodes = [
+      node('A'),
+      node('B', { isRoom: true, category: 'bathroom' }),
+      node('C', { isRoom: true, category: 'bathroom' }),
+    ];
+    const edges = [edge('e1', 'A', 'B', 1), edge('e2', 'A', 'C', 5)];
+    expect(dijkstraToCategory(nodes, edges, 'A', 'bathroom', new Set())).toEqual(['A', 'B']);
+  });
+
+  it('routes to farther room when nearer one is unreachable due to excluded type', () => {
+    //  A --stairs-- B(bathroom)
+    //  A --walkway--C(bathroom)
+    const nodes = [
+      node('A'),
+      node('B', { isRoom: true, category: 'bathroom' }),
+      node('C', { isRoom: true, category: 'bathroom' }),
+    ];
+    const edges = [
+      edge('e1', 'A', 'B', 1, 'stairs'),
+      edge('e2', 'A', 'C', 5, 'walkway'),
+    ];
+    const path = dijkstraToCategory(nodes, edges, 'A', 'bathroom', new Set(['stairs']));
+    expect(path).toEqual(['A', 'C']);
+  });
+
+  it('returns null when no room with the given category exists', () => {
+    const nodes = [node('A'), node('B', { isRoom: true, category: 'kitchen' })];
+    const edges = [edge('e1', 'A', 'B', 1)];
+    expect(dijkstraToCategory(nodes, edges, 'A', 'bathroom', new Set())).toBeNull();
+  });
+
+  it('returns null when no room with the category is reachable', () => {
+    const nodes = [node('A'), node('B'), node('C', { isRoom: true, category: 'bathroom' })];
+    const edges = [edge('e1', 'A', 'B', 1)]; // C is disconnected
+    expect(dijkstraToCategory(nodes, edges, 'A', 'bathroom', new Set())).toBeNull();
+  });
+
+  it('returns single-node path when src itself has the target category', () => {
+    const nodes = [node('A', { isRoom: true, category: 'bathroom' }), node('B')];
+    const edges = [edge('e1', 'A', 'B', 1)];
+    expect(dijkstraToCategory(nodes, edges, 'A', 'bathroom', new Set())).toEqual(['A']);
   });
 });

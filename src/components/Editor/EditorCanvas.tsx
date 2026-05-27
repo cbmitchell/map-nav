@@ -23,6 +23,7 @@ interface LabelEditorState {
   label: string;
   isRoom: boolean;
   isConnector: boolean;
+  category: string;
 }
 
 interface EdgeEditorState {
@@ -424,6 +425,7 @@ export function EditorCanvas({
           label: node.label,
           isRoom: node.isRoom,
           isConnector: node.isConnector,
+          category: node.category ?? '',
         });
         return;
       }
@@ -452,6 +454,7 @@ export function EditorCanvas({
         label: labelEditor.label,
         isRoom: labelEditor.isRoom,
         isConnector: labelEditor.isConnector,
+        category: labelEditor.isRoom && labelEditor.category.trim() ? labelEditor.category.trim() : undefined,
       },
     });
     setLabelEditor(null);
@@ -534,6 +537,21 @@ export function EditorCanvas({
               <span>Is room</span>
             </label>
           </div>
+          {labelEditor.isRoom && (
+            <div style={styles.popupRow}>
+              <label style={styles.popupLabel}>Category</label>
+              <input
+                style={styles.popupInput}
+                placeholder="e.g. bathroom"
+                value={labelEditor.category}
+                onChange={(ev) => setLabelEditor({ ...labelEditor, category: ev.target.value })}
+                onKeyDown={(ev) => {
+                  if (ev.key === 'Enter') submitLabelEditor();
+                  if (ev.key === 'Escape') setLabelEditor(null);
+                }}
+              />
+            </div>
+          )}
           <div style={styles.popupRow}>
             <label style={styles.checkLabel}>
               <input

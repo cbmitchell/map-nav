@@ -12,6 +12,7 @@ export function Navigator() {
   const { state } = useGraphReducer();
   const [srcId, setSrcId] = useState<string | null>(null);
   const [tgtId, setTgtId] = useState<string | null>(null);
+  const [tgtCategory, setTgtCategory] = useState<string | null>(null);
   const [accessibleOnly, setAccessibleOnly] = useState(false);
   const [showDirections, setShowDirections] = useState(false);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
@@ -42,7 +43,7 @@ export function Navigator() {
     [accessibleOnly],
   );
 
-  const { path, error } = usePathfinder(state, srcId, tgtId, excludedTypes);
+  const { path, error } = usePathfinder(state, srcId, tgtId, tgtCategory, excludedTypes);
 
   // Wrap setSrcId so that picking a new origin also switches the canvas to that section
   const handleSrcChange = useCallback((id: string | null) => {
@@ -52,6 +53,26 @@ export function Navigator() {
       if (srcNode) switchSection(srcNode.sectionId);
     }
   }, [state.nodes, switchSection]);
+
+  const handleTgtChange = useCallback((id: string | null) => {
+    setTgtId(id);
+    setTgtCategory(null);
+  }, []);
+
+  const handleTgtCategoryChange = useCallback((cat: string | null) => {
+    setTgtCategory(cat);
+    setTgtId(null);
+  }, []);
+
+  // When routing by category, resolve the destination room name from the path's last node
+  const resolvedTgtLabel = useMemo(() => {
+    if (!tgtCategory || !path || path.length === 0) return null;
+    const nodeIndex = new Map(state.nodes.map((n) => [n.id, n]));
+    const tgtNode = nodeIndex.get(path[path.length - 1]);
+    if (!tgtNode) return null;
+    const sectionName = state.sections.find((s) => s.id === tgtNode.sectionId)?.name ?? '';
+    return tgtNode.label ? `${tgtNode.label} (${sectionName})` : `(unlabeled) (${sectionName})`;
+  }, [tgtCategory, path, state.nodes, state.sections]);
 
   // Ordered list of sections that the path visits (deduplicated, in order)
   const pathSections = useMemo(() => {
@@ -77,11 +98,14 @@ export function Navigator() {
         building={state}
         srcId={srcId}
         tgtId={tgtId}
+        tgtCategory={tgtCategory}
         accessibleOnly={accessibleOnly}
         showDirections={showDirections}
         error={error}
+        resolvedTgtLabel={resolvedTgtLabel}
         onSrcChange={handleSrcChange}
-        onTgtChange={setTgtId}
+        onTgtChange={handleTgtChange}
+        onTgtCategoryChange={handleTgtCategoryChange}
         onAccessibleToggle={setAccessibleOnly}
         onDirectionsToggle={setShowDirections}
       />

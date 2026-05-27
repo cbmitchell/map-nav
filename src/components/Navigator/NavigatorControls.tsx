@@ -1,14 +1,18 @@
+import { useState } from 'react';
 import type { Building } from '../../types/graph';
 
 interface NavigatorControlsProps {
   building: Building;
   srcId: string | null;
   tgtId: string | null;
+  tgtCategory: string | null;
   accessibleOnly: boolean;
   showDirections: boolean;
   error: string | null;
+  resolvedTgtLabel: string | null;
   onSrcChange: (id: string | null) => void;
   onTgtChange: (id: string | null) => void;
+  onTgtCategoryChange: (category: string | null) => void;
   onAccessibleToggle: (v: boolean) => void;
   onDirectionsToggle: (v: boolean) => void;
 }
@@ -17,14 +21,19 @@ export function NavigatorControls({
   building,
   srcId,
   tgtId,
+  tgtCategory,
   accessibleOnly,
   showDirections,
   error,
+  resolvedTgtLabel,
   onSrcChange,
   onTgtChange,
+  onTgtCategoryChange,
   onAccessibleToggle,
   onDirectionsToggle,
 }: NavigatorControlsProps) {
+  const [destMode, setDestMode] = useState<'room' | 'category'>('room');
+
   const rooms = building.nodes.filter((n) => n.isRoom);
 
   // Group rooms by section name for <optgroup>
@@ -39,7 +48,11 @@ export function NavigatorControls({
     grouped.get(key)!.nodes.push(node);
   }
 
-  const renderOptions = (excludeId: string | null) =>
+  const knownCategories = [...new Set(
+    rooms.filter((n) => n.category).map((n) => n.category as string),
+  )].sort();
+
+  const renderRoomOptions = (excludeId: string | null) =>
     [...grouped.entries()].map(([sectionId, { sectionName, nodes }]) => (
       <optgroup key={sectionId} label={sectionName}>
         {nodes
@@ -54,6 +67,15 @@ export function NavigatorControls({
 
   const noRooms = rooms.length === 0;
 
+  const handleDestModeChange = (mode: 'room' | 'category') => {
+    setDestMode(mode);
+    if (mode === 'room') {
+      onTgtCategoryChange(null);
+    } else {
+      onTgtChange(null);
+    }
+  };
+
   return (
     <div style={styles.controls}>
       <div style={styles.row}>
@@ -65,21 +87,65 @@ export function NavigatorControls({
           onChange={(e) => onSrcChange(e.target.value || null)}
         >
           <option value="">— select origin —</option>
-          {renderOptions(tgtId)}
+          {renderRoomOptions(destMode === 'room' ? tgtId : null)}
         </select>
       </div>
 
-      <div style={styles.row}>
-        <label style={styles.label}>To</label>
-        <select
-          style={styles.select}
-          value={tgtId ?? ''}
-          disabled={noRooms}
-          onChange={(e) => onTgtChange(e.target.value || null)}
-        >
-          <option value="">— select destination —</option>
-          {renderOptions(srcId)}
-        </select>
+      <div style={styles.toBlock}>
+        <div style={styles.row}>
+          <label style={styles.label}>To</label>
+          <div style={styles.modeToggle}>
+            <button
+              style={{ ...styles.modeBtn, ...(destMode === 'room' ? styles.modeBtnActive : {}) }}
+              onClick={() => handleDestModeChange('room')}
+            >
+              Room
+            </button>
+            <button
+              style={{ ...styles.modeBtn, ...(destMode === 'category' ? styles.modeBtnActive : {}) }}
+              disabled={knownCategories.length === 0}
+              onClick={() => handleDestModeChange('category')}
+            >
+              Nearest in category
+            </button>
+          </div>
+        </div>
+
+        {destMode === 'room' ? (
+          <select
+            style={{ ...styles.select, marginLeft: 40 }}
+            value={tgtId ?? ''}
+            disabled={noRooms}
+            onChange={(e) => onTgtChange(e.target.value || null)}
+          >
+            <option value="">— select destination —</option>
+            {renderRoomOptions(srcId)}
+          </select>
+        ) : (
+          <>
+            <select
+              style={{ ...styles.select, marginLeft: 40 }}
+              value={tgtCategory ?? ''}
+              disabled={knownCategories.length === 0}
+              onChange={(e) => onTgtCategoryChange(e.target.value || null)}
+            >
+              <option value="">— select category —</option>
+              {knownCategories.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+            {tgtCategory && resolvedTgtLabel && (
+              <div style={styles.resolvedLabel}>
+                Routing to: {resolvedTgtLabel}
+              </div>
+            )}
+            {tgtCategory && !resolvedTgtLabel && (
+              <div style={styles.resolvedLabelMissing}>
+                No reachable room in this category
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       <div style={styles.divider} />
@@ -128,6 +194,11 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: 8,
   },
+  toBlock: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+  },
   label: {
     fontSize: 12,
     color: '#888',
@@ -145,6 +216,38 @@ const styles: Record<string, React.CSSProperties> = {
     outline: 'none',
     cursor: 'pointer',
     minHeight: 40,
+  },
+  modeToggle: {
+    display: 'flex',
+    flex: 1,
+    gap: 4,
+  },
+  modeBtn: {
+    flex: 1,
+    padding: '5px 8px',
+    background: '#141414',
+    border: '1px solid #333',
+    borderRadius: 4,
+    color: '#888',
+    fontSize: 12,
+    cursor: 'pointer',
+  },
+  modeBtnActive: {
+    borderColor: '#378ADD',
+    color: '#378ADD',
+    background: 'rgba(55,138,221,0.1)',
+  },
+  resolvedLabel: {
+    marginLeft: 40,
+    fontSize: 11,
+    color: '#6ab3f5',
+    fontStyle: 'italic',
+  },
+  resolvedLabelMissing: {
+    marginLeft: 40,
+    fontSize: 11,
+    color: '#888',
+    fontStyle: 'italic',
   },
   divider: {
     height: 1,

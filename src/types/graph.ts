@@ -23,6 +23,7 @@ export interface Node {
   label: string;
   isRoom: boolean;
   isConnector: boolean;
+  category?: string;
 }
 
 export interface Edge {
