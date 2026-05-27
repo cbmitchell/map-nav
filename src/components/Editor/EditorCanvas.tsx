@@ -71,6 +71,7 @@ export function EditorCanvas({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const contentHRef = useRef(0);
   const dragRef = useRef<{ nodeId: string } | null>(null);
   const panRef = useRef<{ lastX: number; lastY: number } | null>(null);
   const touchRef = useRef<{ lastX: number; lastY: number } | null>(null);
@@ -105,7 +106,13 @@ export function EditorCanvas({
     const updateSize = () => {
       const w = container.clientWidth;
       const section = buildingRef.current.sections.find((s) => s.id === activeSectionIdRef.current);
-      const h = section?.imageW ? Math.round(w * section.imageH / section.imageW) : w;
+      const imageAspectH = section?.imageW ? Math.round(w * section.imageH / section.imageW) : w;
+      contentHRef.current = imageAspectH;
+      // On mobile/tablet, expand the canvas to fill all available vertical space so zoomed
+      // content is not clipped at the image's unzoomed aspect-ratio boundary.
+      const h = isSmall
+        ? Math.max(container.clientHeight, imageAspectH)
+        : imageAspectH;
       if (canvas.width !== w || canvas.height !== h) {
         canvas.width = w;
         canvas.height = h;
@@ -117,7 +124,7 @@ export function EditorCanvas({
     const observer = new ResizeObserver(updateSize);
     observer.observe(container);
     return () => observer.disconnect();
-  }, [activeSectionId, building.sections, redraw]);
+  }, [activeSectionId, building.sections, redraw, isSmall]);
 
   // Wheel zoom (non-passive so we can preventDefault)
   useEffect(() => {
@@ -201,7 +208,7 @@ export function EditorCanvas({
   const SCREEN_HIT_RADIUS = 12;
   function hitNodeScreen(screenX: number, screenY: number, node: Node): boolean {
     const canvas = canvasRef.current!;
-    const { x, y } = contentToScreen(node.nx * canvas.width, node.ny * canvas.height);
+    const { x, y } = contentToScreen(node.nx * canvas.width, node.ny * contentHRef.current);
     return Math.hypot(screenX - x, screenY - y) < SCREEN_HIT_RADIUS;
   }
 
@@ -244,7 +251,7 @@ export function EditorCanvas({
     const { x, y } = getContentCoords(e);
     const canvas = canvasRef.current!;
     const W = canvas.width;
-    const H = canvas.height;
+    const H = contentHRef.current;
     const es = esRef.current;
     const sectionNodes = getSectionNodes();
 
@@ -383,7 +390,7 @@ export function EditorCanvas({
     const { x, y } = screenToCanvas(screen.x, screen.y, zoomPanRef.current);
     const canvas = canvasRef.current!;
     const W = canvas.width;
-    const H = canvas.height;
+    const H = contentHRef.current;
     const es = esRef.current;
 
     // Rubber-band preview: store mouse in content coords
@@ -495,7 +502,7 @@ export function EditorCanvas({
     // Synthesize a mouse-down equivalent using screen coords
     const { x, y } = screenToCanvas(sx, sy, zoomPanRef.current);
     const W = canvas.width;
-    const H = canvas.height;
+    const H = contentHRef.current;
     const es = esRef.current;
     const sectionNodes = getSectionNodes();
 
@@ -597,7 +604,7 @@ export function EditorCanvas({
     const sy = t.clientY - rect.top;
     const { x, y } = screenToCanvas(sx, sy, zoomPanRef.current);
     const W = canvas.width;
-    const H = canvas.height;
+    const H = contentHRef.current;
     const es = esRef.current;
 
     if (es.mode === 'edge') {

@@ -143,6 +143,10 @@
 }
 
 @media (max-width: 1024px) {
+  .container {
+    height: 100%;
+  }
+
   .popupBtn {
     padding: 8px 14px;
     font-size: 14px;

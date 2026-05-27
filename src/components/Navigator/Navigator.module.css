@@ -45,6 +45,10 @@
 }
 
 @media (max-width: 1024px) {
+  .canvasArea {
+    overflow: hidden;
+  }
+
   .stepBtn {
     padding: 8px 12px;
   }

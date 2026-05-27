@@ -2,6 +2,7 @@ import { useRef, useLayoutEffect, useEffect } from 'react';
 import type { Building } from '../../types/graph';
 import type { ZoomPanState } from '../../hooks/useZoomPan';
 import { useCanvasRenderer } from '../../hooks/useCanvasRenderer';
+import { useMobile } from '../../hooks/useMobile';
 
 interface NavigatorCanvasProps {
   building: Building;
@@ -22,6 +23,8 @@ export function NavigatorCanvas({
   onPan,
   onZoomAt,
 }: NavigatorCanvasProps) {
+  const { isMobile, isTablet } = useMobile();
+  const isSmall = isMobile || isTablet;
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const panRef = useRef<{ lastX: number; lastY: number } | null>(null);
@@ -57,7 +60,10 @@ export function NavigatorCanvas({
       const section = buildingRef.current.sections.find(
         (s) => s.id === activeSectionIdRef.current,
       );
-      const h = section?.imageW ? Math.round((w * section.imageH) / section.imageW) : w;
+      const imageAspectH = section?.imageW ? Math.round((w * section.imageH) / section.imageW) : w;
+      const h = isSmall
+        ? Math.max(container.clientHeight, imageAspectH)
+        : imageAspectH;
       if (canvas.width !== w || canvas.height !== h) {
         canvas.width = w;
         canvas.height = h;
@@ -69,7 +75,7 @@ export function NavigatorCanvas({
     const observer = new ResizeObserver(updateSize);
     observer.observe(container);
     return () => observer.disconnect();
-  }, [activeSectionId, building.sections, redraw]);
+  }, [activeSectionId, building.sections, redraw, isSmall]);
 
   // Wheel zoom (non-passive)
   useEffect(() => {
@@ -208,7 +214,7 @@ export function NavigatorCanvas({
   return (
     <div
       ref={containerRef}
-      style={styles.container}
+      style={{ ...styles.container, ...(isSmall ? { height: '100%' } : {}) }}
       onMouseLeave={() => { panRef.current = null; }}
     >
       {!hasImage && (

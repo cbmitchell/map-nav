@@ -79,6 +79,13 @@ export function useCanvasRenderer(
     const { scale, panX, panY } = zoomPanRef.current;
     const path = highlightPathRef.current;
 
+    // On mobile the canvas may be taller than the image aspect ratio (fills the screen).
+    // Content coordinates are always bounded by the image's natural aspect ratio.
+    const activeSection = building.sections.find((s) => s.id === activeSectionId);
+    const contentH = activeSection?.imageW && W > 0
+      ? Math.round(W * activeSection.imageH / activeSection.imageW)
+      : H;
+
     // Build path lookup structures when a highlight path is provided
     const pathNodeSet = path ? new Set(path) : null;
     const pathEdgePairs = new Set<string>();
@@ -114,16 +121,16 @@ export function useCanvasRenderer(
         imageCache.current.set(cacheKey, img);
       }
       if (img.complete && img.naturalWidth > 0) {
-        ctx.drawImage(img, 0, 0, W, H);
+        ctx.drawImage(img, 0, 0, W, contentH);
       }
     } else {
       ctx.fillStyle = '#222';
-      ctx.fillRect(0, 0, W, H);
+      ctx.fillRect(0, 0, W, contentH);
     }
 
-    // 2. Semi-transparent overlay
+    // 2. Semi-transparent overlay (only over the image area)
     ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(0, 0, W, contentH);
 
     // Switch to screen space
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -162,8 +169,8 @@ export function useCanvasRenderer(
       const src = nodeIndex.get(edge.srcId);
       const tgt = nodeIndex.get(edge.tgtId);
       if (!src || !tgt) return; // skip orphaned edges (corrupted data guard)
-      const { x: sx, y: sy } = toScreen(src.nx * W, src.ny * H);
-      const { x: tx, y: ty } = toScreen(tgt.nx * W, tgt.ny * H);
+      const { x: sx, y: sy } = toScreen(src.nx * W, src.ny * contentH);
+      const { x: tx, y: ty } = toScreen(tgt.nx * W, tgt.ny * contentH);
       const isSelected = edge.id === es.selectedEdgeId;
 
       ctx.beginPath();
@@ -217,7 +224,7 @@ export function useCanvasRenderer(
     if (es.mode === 'edge' && es.pendingEdgeSrcId && es.mousePos) {
       const srcNode = nodeIndex.get(es.pendingEdgeSrcId);
       if (srcNode) {
-        const src = toScreen(srcNode.nx * W, srcNode.ny * H);
+        const src = toScreen(srcNode.nx * W, srcNode.ny * contentH);
         const mouse = toScreen(es.mousePos.x, es.mousePos.y);
         ctx.beginPath();
         ctx.moveTo(src.x, src.y);
@@ -234,7 +241,7 @@ export function useCanvasRenderer(
 
     // 5. Nodes
     const drawNode = (node: typeof sectionNodes[number], isPath: boolean) => {
-      const { x, y } = toScreen(node.nx * W, node.ny * H);
+      const { x, y } = toScreen(node.nx * W, node.ny * contentH);
 
       const hasCrossSection = crossSectionNodeIds.has(node.id);
       if (hasCrossSection && !isPathMode) {

@@ -1,17 +1,13 @@
 import { useRef } from 'react';
+import type { ReactNode } from 'react';
 import clsx from 'clsx';
 import { loadPdf, renderPdfPage } from '../../utils/pdf';
 import type { Dispatch } from 'react';
 import type { Building, Section } from '../../types/graph';
-import type { EdgeType } from '../../types/graph';
 import type { EditorState, EditorMode } from '../../types/editor';
 import type { Action } from '../../hooks/useGraphReducer';
-import { EDGE_COLORS, EDGE_LABELS } from '../../hooks/useCanvasRenderer';
-import { FIXED_WEIGHTS } from '../../utils/pathfinding';
 import { exportBuilding, importBuilding } from '../../utils/export';
 import styles from './EditorToolbar.module.css';
-
-const ALL_EDGE_TYPES: EdgeType[] = ['walkway', 'stairs', 'elevator', 'ramp', 'bridge'];
 
 interface EditorToolbarProps {
   building: Building;
@@ -78,9 +74,6 @@ export function EditorToolbar({
     }
   };
 
-  const fixedWeight = FIXED_WEIGHTS[editorState.currentEdgeType];
-  const weightHint = fixedWeight !== undefined ? `Fixed: ${fixedWeight}` : 'Euclidean';
-
   const handleImportClick = () => importInputRef.current?.click();
 
   const handleImportChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -113,36 +106,25 @@ export function EditorToolbar({
 
       {/* Mode buttons */}
       <div className={styles.group}>
-        {(['select', 'node', 'edge'] as EditorMode[]).map((m) => (
+        {([
+          ['select', 'Select', (
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden>
+              <path d="M1.5 1.5 L1.5 10.5 L4.5 7.5 L6.5 12.5 L8 11.8 L6 6.8 L10 6.8 Z" />
+            </svg>
+          )],
+          ['node', 'Add Node', '⊕'],
+          ['edge', 'Add Edge', '↔'],
+        ] as [EditorMode, string, ReactNode][]).map(([m, label, icon]) => (
           <button
             key={m}
+            title={label}
             className={clsx(styles.btn, editorState.mode === m && styles.btnActive)}
             onClick={() => setMode(m)}
           >
-            {m === 'select' ? 'Select' : m === 'node' ? 'Add Node' : 'Add Edge'}
+            <span className={styles.btnLabel}>{label}</span>
+            <span className={styles.btnIcon}>{icon}</span>
           </button>
         ))}
-      </div>
-
-      <div className={styles.divider} />
-
-      {/* Edge type selector — colors are dynamic (EDGE_COLORS lookup), so stay inline */}
-      <div className={styles.group}>
-        {ALL_EDGE_TYPES.map((t) => (
-          <button
-            key={t}
-            className={styles.edgeTypeBtn}
-            style={{
-              borderColor: EDGE_COLORS[t],
-              color: editorState.currentEdgeType === t ? '#fff' : EDGE_COLORS[t],
-              background: editorState.currentEdgeType === t ? EDGE_COLORS[t] : 'transparent',
-            }}
-            onClick={() => onEditorStateChange({ currentEdgeType: t })}
-          >
-            {EDGE_LABELS[t]}
-          </button>
-        ))}
-        <span className={styles.weightHint}>{weightHint}</span>
       </div>
 
       <div className={styles.divider} />
@@ -150,28 +132,49 @@ export function EditorToolbar({
       {/* Action buttons */}
       <div className={styles.group}>
         <button
+          title="Delete selected"
           className={clsx(styles.btn, hasSelection ? styles.btnDanger : styles.btnDisabled)}
           disabled={!hasSelection}
           onClick={onDelete}
         >
-          Delete
+          <span className={styles.btnLabel}>Delete</span>
+          <span className={styles.btnIcon}>✕</span>
         </button>
         <button
+          title="Replace image"
           className={clsx(styles.btn, !activeSectionId && styles.btnDisabled)}
           disabled={!activeSectionId}
           onClick={handleUploadClick}
         >
-          Replace Image
+          <span className={styles.btnLabel}>Replace Image</span>
+          <span className={styles.btnIcon}>⬚</span>
         </button>
-        <button className={styles.btn} onClick={handleImportClick}>
-          Import JSON
+        <button title="Import JSON" className={styles.btn} onClick={handleImportClick}>
+          <span className={styles.btnLabel}>Import JSON</span>
+          <span className={styles.btnIcon}>
+            {/* Arrow pointing down into a tray */}
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden>
+              <rect x="6" y="1" width="2" height="6"/>
+              <polygon points="3.5,6 10.5,6 7,10.5"/>
+              <rect x="1" y="12" width="12" height="1.5" rx="0.5"/>
+            </svg>
+          </span>
         </button>
         <button
+          title="Export JSON"
           className={clsx(styles.btn, building.sections.length === 0 && styles.btnDisabled)}
           disabled={building.sections.length === 0}
           onClick={() => exportBuilding(building)}
         >
-          Export JSON
+          <span className={styles.btnLabel}>Export JSON</span>
+          <span className={styles.btnIcon}>
+            {/* Arrow pointing up out of a tray */}
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden>
+              <polygon points="3.5,7.5 10.5,7.5 7,3"/>
+              <rect x="6" y="7" width="2" height="4"/>
+              <rect x="1" y="12" width="12" height="1.5" rx="0.5"/>
+            </svg>
+          </span>
         </button>
       </div>
 
@@ -182,7 +185,10 @@ export function EditorToolbar({
         <button className={styles.btn} onClick={onZoomOut} title="Zoom out">−</button>
         <span className={styles.zoomLabel}>{Math.round(scale * 100)}%</span>
         <button className={styles.btn} onClick={onZoomIn} title="Zoom in">+</button>
-        <button className={styles.btn} onClick={onResetView} title="Reset view">Reset</button>
+        <button className={styles.btn} onClick={onResetView} title="Reset view">
+          <span className={styles.btnLabel}>Reset</span>
+          <span className={styles.btnIcon}>↺</span>
+        </button>
       </div>
 
       {/* Pending cross-section link banner */}
