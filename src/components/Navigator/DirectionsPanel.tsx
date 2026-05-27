@@ -1,3 +1,4 @@
+import clsx from 'clsx';
 import type { Building } from '../../types/graph';
 import styles from './DirectionsPanel.module.css';
 
@@ -63,7 +64,14 @@ export function DirectionsPanel({ building, path }: DirectionsPanelProps) {
       <div className={styles.header}>Directions</div>
       <ol className={styles.list}>
         {steps.map((step, i) => (
-          <li key={i} className={styles.step} style={kindStyle(step.kind)}>
+          <li
+            key={i}
+            className={clsx(
+              styles.step,
+              (step.kind === 'start' || step.kind === 'arrive') && styles.stepHighlight,
+              step.kind === 'transition' && styles.stepTransition,
+            )}
+          >
             {step.label}
           </li>
         ))}
@@ -75,16 +83,3 @@ export function DirectionsPanel({ building, path }: DirectionsPanelProps) {
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
-
-function kindStyle(kind: WaypointStep['kind']): React.CSSProperties {
-  switch (kind) {
-    case 'start':
-    case 'arrive':
-      return { color: '#EF9F27', fontWeight: 600 };
-    case 'transition':
-      return { color: '#534AB7' };
-    default:
-      return {};
-  }
-}
-

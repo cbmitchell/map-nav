@@ -90,7 +90,7 @@ export function Navigator() {
     return sections;
   }, [path, state.nodes]);
 
-  const currentPathSectionIndex = pathSections.indexOf(activeSectionId ?? '');
+  const currentPathSectionIndex = pathSections.lastIndexOf(activeSectionId ?? '');
   const canStepPrev = currentPathSectionIndex > 0;
   const canStepNext = currentPathSectionIndex < pathSections.length - 1 && currentPathSectionIndex !== -1;
 

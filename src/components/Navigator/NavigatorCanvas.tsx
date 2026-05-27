@@ -3,6 +3,7 @@ import type { Building } from '../../types/graph';
 import type { ZoomPanState } from '../../hooks/useZoomPan';
 import { useCanvasRenderer } from '../../hooks/useCanvasRenderer';
 import { useMobile } from '../../hooks/useMobile';
+import styles from './NavigatorCanvas.module.css';
 
 interface NavigatorCanvasProps {
   building: Building;
@@ -214,11 +215,12 @@ export function NavigatorCanvas({
   return (
     <div
       ref={containerRef}
-      style={{ ...styles.container, ...(isSmall ? { height: '100%' } : {}) }}
+      className={styles.container}
+      style={isSmall ? { height: '100%' } : undefined}
       onMouseLeave={() => { panRef.current = null; }}
     >
       {!hasImage && (
-        <div style={styles.placeholder}>
+        <div className={styles.placeholder}>
           <span>No map image for this section</span>
         </div>
       )}
@@ -236,21 +238,3 @@ export function NavigatorCanvas({
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    position: 'relative',
-    width: '100%',
-  },
-  placeholder: {
-    position: 'absolute',
-    inset: 0,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: '#555',
-    fontSize: 18,
-    pointerEvents: 'none',
-    zIndex: 1,
-  },
-};

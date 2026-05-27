@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { useGraphReducer } from '../../hooks/useGraphReducer';
 import { useZoomPan, DEFAULT_ZOOM_PAN } from '../../hooks/useZoomPan';
 import { useMobile } from '../../hooks/useMobile';
@@ -30,12 +30,14 @@ export function Editor() {
   const editorStateRef = useRef(editorState);
   const dispatchRef = useRef(dispatch);
   const undoRef = useRef(undo);
+  const canvasSizeRef = useRef({ w: 0, h: 0 });
 
-  // Keep refs in sync after each render (useLayoutEffect keeps render phase pure)
-  useEffect(() => { zoomPanRef.current = zoomPan; });
-  useEffect(() => { editorStateRef.current = editorState; });
-  useEffect(() => { dispatchRef.current = dispatch; });
-  useEffect(() => { undoRef.current = undo; });
+  useLayoutEffect(() => {
+    zoomPanRef.current = zoomPan;
+    editorStateRef.current = editorState;
+    dispatchRef.current = dispatch;
+    undoRef.current = undo;
+  });
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -141,8 +143,19 @@ export function Editor() {
     }
   };
 
-  const handleZoomIn = useCallback(() => zoomIn(), [zoomIn]);
-  const handleZoomOut = useCallback(() => zoomOut(), [zoomOut]);
+  const handleResize = useCallback((w: number, h: number) => {
+    canvasSizeRef.current = { w, h };
+  }, []);
+
+  const handleZoomIn = useCallback(() => {
+    const { w, h } = canvasSizeRef.current;
+    zoomIn(w / 2, h / 2);
+  }, [zoomIn]);
+
+  const handleZoomOut = useCallback(() => {
+    const { w, h } = canvasSizeRef.current;
+    zoomOut(w / 2, h / 2);
+  }, [zoomOut]);
 
   const activeSection = state.sections.find((s) => s.id === activeSectionId);
 
@@ -197,8 +210,7 @@ export function Editor() {
               zoomPan={zoomPan}
               onWheel={handleWheel}
               onPan={pan}
-              onZoomIn={zoomIn}
-              onZoomOut={zoomOut}
+              onResize={handleResize}
             />
           )}
         </div>

@@ -48,8 +48,7 @@ interface EditorCanvasProps {
   zoomPan: ZoomPanState;
   onWheel: (e: WheelEvent, rect: DOMRect) => void;
   onPan: (dx: number, dy: number) => void;
-  onZoomIn: (cx: number, cy: number) => void;
-  onZoomOut: (cx: number, cy: number) => void;
+  onResize: (w: number, h: number) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -65,6 +64,7 @@ export function EditorCanvas({
   zoomPan,
   onWheel,
   onPan,
+  onResize,
 }: EditorCanvasProps) {
   const { isMobile, isTablet } = useMobile();
   const isSmall = isMobile || isTablet;
@@ -77,7 +77,7 @@ export function EditorCanvas({
   const touchRef = useRef<{ lastX: number; lastY: number } | null>(null);
   const lastTapRef = useRef<{ time: number; x: number; y: number } | null>(null);
   const spaceRef = useRef(false);
-  const prevMouseRef = useRef<{ x: number; y: number } | null>(null);
+
 
   const [labelEditor, setLabelEditor] = useState<LabelEditorState | null>(null);
   const [edgeEditor, setEdgeEditor] = useState<EdgeEditorState | null>(null);
@@ -117,6 +117,7 @@ export function EditorCanvas({
         canvas.width = w;
         canvas.height = h;
       }
+      onResize(w, h);
       redraw();
     };
 
@@ -124,7 +125,7 @@ export function EditorCanvas({
     const observer = new ResizeObserver(updateSize);
     observer.observe(container);
     return () => observer.disconnect();
-  }, [activeSectionId, building.sections, redraw, isSmall]);
+  }, [activeSectionId, building.sections, redraw, isSmall, onResize]);
 
   // Wheel zoom (non-passive so we can preventDefault)
   useEffect(() => {
@@ -229,7 +230,6 @@ export function EditorCanvas({
 
   const handleMouseDown = (e: React.MouseEvent) => {
     const screen = getScreenCoords(e);
-    prevMouseRef.current = screen;
 
     // Middle mouse button — start pan
     if (e.button === 1) {
@@ -413,7 +413,6 @@ export function EditorCanvas({
       });
     }
 
-    prevMouseRef.current = screen;
   };
 
   const handleMouseUp = (e: React.MouseEvent) => {

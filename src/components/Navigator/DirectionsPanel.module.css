@@ -31,3 +31,12 @@
   color: var(--text-muted);
   line-height: 1.6;
 }
+
+.stepHighlight {
+  color: #EF9F27;
+  font-weight: 600;
+}
+
+.stepTransition {
+  color: #534AB7;
+}
