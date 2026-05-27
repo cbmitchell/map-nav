@@ -42,3 +42,10 @@
   color: var(--text-ghost);
   line-height: 1.8;
 }
+
+@media (max-width: 640px) {
+  .onboarding {
+    margin: 24px auto;
+    padding: 0 16px;
+  }
+}

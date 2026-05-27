@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import clsx from 'clsx';
-import { renderPdfPage } from '../../utils/pdf';
+import { loadPdf, renderPdfPage } from '../../utils/pdf';
 import type { Dispatch } from 'react';
 import type { Building, Section } from '../../types/graph';
 import type { EdgeType } from '../../types/graph';
@@ -25,6 +25,7 @@ interface EditorToolbarProps {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onResetView: () => void;
+  onSidebarToggle: () => void;
 }
 
 export function EditorToolbar({
@@ -39,6 +40,7 @@ export function EditorToolbar({
   onZoomIn,
   onZoomOut,
   onResetView,
+  onSidebarToggle,
 }: EditorToolbarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -59,8 +61,9 @@ export function EditorToolbar({
     if (!file) return;
     e.target.value = '';
 
-    if (file.type === 'application/pdf') {
-      const { imageData, imageW, imageH } = await renderPdfPage(file, 1);
+    if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+      const doc = await loadPdf(file);
+      const { imageData, imageW, imageH } = await renderPdfPage(doc, 1);
       dispatchImage(imageData, imageW, imageH);
     } else {
       const reader = new FileReader();
@@ -100,6 +103,9 @@ export function EditorToolbar({
 
   return (
     <div className={styles.toolbar}>
+      {/* Hamburger — hidden on desktop via CSS, shown on tablet/mobile */}
+      <button className={styles.hamburger} onClick={onSidebarToggle} title="Toggle sections">☰</button>
+
       {/* Current section name */}
       {activeSection && (
         <span className={styles.sectionName}>{activeSection.name}</span>

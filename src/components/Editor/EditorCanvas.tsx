@@ -1,4 +1,5 @@
 import { useRef, useState, useLayoutEffect, useEffect } from 'react';
+import clsx from 'clsx';
 import type { Dispatch } from 'react';
 import type { Building, EdgeType, Node } from '../../types/graph';
 import type { EditorState } from '../../types/editor';
@@ -9,6 +10,8 @@ import { useCanvasRenderer, EDGE_COLORS, EDGE_LABELS } from '../../hooks/useCanv
 import { distanceToSegment, px2norm } from '../../utils/geometry';
 import { FIXED_WEIGHTS } from '../../utils/pathfinding';
 import { euclideanWeight } from '../../utils/geometry';
+import { useMobile } from '../../hooks/useMobile';
+import popupStyles from './EditorCanvas.module.css';
 
 const ALL_EDGE_TYPES: EdgeType[] = ['walkway', 'stairs', 'elevator', 'ramp', 'bridge'];
 
@@ -63,10 +66,15 @@ export function EditorCanvas({
   onWheel,
   onPan,
 }: EditorCanvasProps) {
+  const { isMobile, isTablet } = useMobile();
+  const isSmall = isMobile || isTablet;
+
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dragRef = useRef<{ nodeId: string } | null>(null);
   const panRef = useRef<{ lastX: number; lastY: number } | null>(null);
+  const touchRef = useRef<{ lastX: number; lastY: number } | null>(null);
+  const lastTapRef = useRef<{ time: number; x: number; y: number } | null>(null);
   const spaceRef = useRef(false);
   const prevMouseRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -442,6 +450,183 @@ export function EditorCanvas({
   };
 
   // ---------------------------------------------------------------------------
+  // Touch events (reuse same hit-test and dispatch logic as mouse handlers)
+  // ---------------------------------------------------------------------------
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0];
+    const canvas = canvasRef.current!;
+    const rect = canvas.getBoundingClientRect();
+    const sx = t.clientX - rect.left;
+    const sy = t.clientY - rect.top;
+
+    touchRef.current = { lastX: t.clientX, lastY: t.clientY };
+
+    // Double-tap detection — fire label editor open if two taps within 300ms/20px
+    const now = Date.now();
+    const last = lastTapRef.current;
+    if (last && now - last.time < 300 && Math.hypot(sx - last.x, sy - last.y) < 20) {
+      lastTapRef.current = null;
+      if (esRef.current.mode === 'select') {
+        const sectionNodes = getSectionNodes();
+        for (const node of sectionNodes) {
+          if (hitNodeScreen(sx, sy, node)) {
+            setEdgeEditor(null);
+            const c = canvasRef.current!;
+            const nodeScreen = contentToScreen(node.nx * c.width, node.ny * c.height);
+            setLabelEditor({
+              nodeId: node.id,
+              screenX: nodeScreen.x,
+              screenY: nodeScreen.y,
+              label: node.label,
+              isRoom: node.isRoom,
+              isConnector: node.isConnector,
+              category: node.category ?? '',
+            });
+            return;
+          }
+        }
+      }
+      return;
+    }
+    lastTapRef.current = { time: now, x: sx, y: sy };
+
+    // Synthesize a mouse-down equivalent using screen coords
+    const { x, y } = screenToCanvas(sx, sy, zoomPanRef.current);
+    const W = canvas.width;
+    const H = canvas.height;
+    const es = esRef.current;
+    const sectionNodes = getSectionNodes();
+
+    if (es.mode === 'select') {
+      setLabelEditor(null);
+      setEdgeEditor(null);
+      for (const node of sectionNodes) {
+        if (hitNodeScreen(sx, sy, node)) {
+          onEditorStateChange({ selectedNodeId: node.id, selectedEdgeId: null });
+          dragRef.current = { nodeId: node.id };
+          return;
+        }
+      }
+      const sectionEdges = getSectionEdges(sectionNodes);
+      const nodeIndex = new Map(buildingRef.current.nodes.map((n) => [n.id, n]));
+      for (const edge of sectionEdges) {
+        const src = nodeIndex.get(edge.srcId)!;
+        const tgt = nodeIndex.get(edge.tgtId)!;
+        const { x: ex, y: ey } = contentToScreen(src.nx * W, src.ny * H);
+        const { x: tx, y: ty } = contentToScreen(tgt.nx * W, tgt.ny * H);
+        if (distanceToSegment(sx, sy, ex, ey, tx, ty) < 6) {
+          onEditorStateChange({ selectedEdgeId: edge.id, selectedNodeId: null });
+          setEdgeEditor({ edgeId: edge.id, screenX: (ex + tx) / 2, screenY: (ey + ty) / 2 });
+          return;
+        }
+      }
+      onEditorStateChange({ selectedNodeId: null, selectedEdgeId: null });
+    }
+
+    if (es.mode === 'node') {
+      for (const node of sectionNodes) {
+        if (hitNodeScreen(sx, sy, node)) return;
+      }
+      if (!activeSectionIdRef.current) return;
+      const norm = px2norm(x, y, W, H);
+      const clamped = { x: Math.max(0, Math.min(1, norm.x)), y: Math.max(0, Math.min(1, norm.y)) };
+      const sectionEdges = getSectionEdges(sectionNodes);
+      const edgeNodeIndex = new Map(buildingRef.current.nodes.map((n) => [n.id, n]));
+      for (const edge of sectionEdges) {
+        const edgeSrc = edgeNodeIndex.get(edge.srcId)!;
+        const edgeTgt = edgeNodeIndex.get(edge.tgtId)!;
+        const { x: ex, y: ey } = contentToScreen(edgeSrc.nx * W, edgeSrc.ny * H);
+        const { x: tx, y: ty } = contentToScreen(edgeTgt.nx * W, edgeTgt.ny * H);
+        if (distanceToSegment(sx, sy, ex, ey, tx, ty) < 8) {
+          dispatch({ type: 'SPLIT_EDGE', payload: { edgeId: edge.id, nx: clamped.x, ny: clamped.y }, canvasW: W, canvasH: H });
+          return;
+        }
+      }
+      dispatch({
+        type: 'ADD_NODE',
+        payload: { sectionId: activeSectionIdRef.current, nx: clamped.x, ny: clamped.y, label: '', isRoom: false, isConnector: false },
+      });
+    }
+
+    if (es.mode === 'edge') {
+      const nodeIndex = new Map(buildingRef.current.nodes.map((n) => [n.id, n]));
+      for (const node of sectionNodes) {
+        if (hitNodeScreen(sx, sy, node)) {
+          if (!es.pendingEdgeSrcId) { onEditorStateChange({ pendingEdgeSrcId: node.id }); return; }
+          if (es.pendingEdgeSrcId === node.id) { onEditorStateChange({ pendingEdgeSrcId: null }); return; }
+          const srcNode = nodeIndex.get(es.pendingEdgeSrcId);
+          if (!srcNode) return;
+          const type = es.currentEdgeType;
+          const fixed = FIXED_WEIGHTS[type];
+          const weight = fixed !== undefined ? fixed : euclideanWeight(srcNode, node, W, H);
+          dispatch({ type: 'ADD_EDGE', payload: { srcId: es.pendingEdgeSrcId, tgtId: node.id, type, weight, crossSection: false } });
+          onEditorStateChange({ pendingEdgeSrcId: null });
+          return;
+        }
+      }
+      if (es.pendingEdgeSrcId) onEditorStateChange({ pendingEdgeSrcId: null });
+    }
+
+    if (es.mode === 'link' && es.pendingLinkSrc) {
+      for (const node of sectionNodes) {
+        if (hitNodeScreen(sx, sy, node)) {
+          if (!node.isConnector) return;
+          const type = es.currentEdgeType;
+          const weight = FIXED_WEIGHTS[type] ?? 100;
+          dispatch({ type: 'ADD_EDGE', payload: { srcId: es.pendingLinkSrc.nodeId, tgtId: node.id, type, weight, crossSection: true } });
+          onEditorStateChange({ mode: 'select', pendingLinkSrc: null });
+          return;
+        }
+      }
+      onEditorStateChange({ mode: 'select', pendingLinkSrc: null });
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1 || !touchRef.current) return;
+    const t = e.touches[0];
+    const dx = t.clientX - touchRef.current.lastX;
+    const dy = t.clientY - touchRef.current.lastY;
+    touchRef.current = { lastX: t.clientX, lastY: t.clientY };
+
+    const canvas = canvasRef.current!;
+    const rect = canvas.getBoundingClientRect();
+    const sx = t.clientX - rect.left;
+    const sy = t.clientY - rect.top;
+    const { x, y } = screenToCanvas(sx, sy, zoomPanRef.current);
+    const W = canvas.width;
+    const H = canvas.height;
+    const es = esRef.current;
+
+    if (es.mode === 'edge') {
+      onEditorStateChange({ mousePos: { x, y } });
+    }
+
+    if (dragRef.current && es.mode === 'select') {
+      const norm = px2norm(x, y, W, H);
+      dispatch({
+        type: 'UPDATE_NODE',
+        payload: { id: dragRef.current.nodeId, nx: Math.max(0, Math.min(1, norm.x)), ny: Math.max(0, Math.min(1, norm.y)) },
+        canvasW: W,
+        canvasH: H,
+      });
+      return;
+    }
+
+    onPan(dx, dy);
+  };
+
+  const handleTouchEnd = () => {
+    touchRef.current = null;
+    dragRef.current = null;
+    if (esRef.current.mode === 'edge') {
+      onEditorStateChange({ mousePos: null });
+    }
+  };
+
+  // ---------------------------------------------------------------------------
   // Label editor
   // ---------------------------------------------------------------------------
 
@@ -486,217 +671,139 @@ export function EditorCanvas({
   const hasImage = !!section?.imageData;
   const canvasW = canvasRef.current?.width ?? 400;
 
+  const closePopups = () => { setLabelEditor(null); setEdgeEditor(null); };
+
   return (
-    <div ref={containerRef} style={styles.container} onMouseLeave={handleMouseLeave}>
+    <div ref={containerRef} className={popupStyles.container} onMouseLeave={handleMouseLeave}>
       {!hasImage && (
-        <div style={styles.placeholder}>
+        <div className={popupStyles.placeholder}>
           <span>Upload a map image to begin</span>
         </div>
       )}
 
       <canvas
         ref={canvasRef}
-        style={{ display: 'block' }}
+        style={{ display: 'block', touchAction: 'none' }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onDoubleClick={handleDblClick}
-        // Prevent context menu on middle click
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         onContextMenu={(e) => e.preventDefault()}
       />
 
-      {/* Label editor popup */}
+      {/* Label editor popup / bottom sheet */}
       {labelEditor && (
-        <div
-          style={{
-            ...styles.popup,
-            left: Math.min(labelEditor.screenX + 12, canvasW - 220),
-            top: labelEditor.screenY + 16,
-          }}
-        >
-          <div style={styles.popupRow}>
-            <label style={styles.popupLabel}>Label</label>
-            <input
-              style={styles.popupInput}
-              autoFocus
-              value={labelEditor.label}
-              onChange={(ev) => setLabelEditor({ ...labelEditor, label: ev.target.value })}
-              onKeyDown={(ev) => {
-                if (ev.key === 'Enter') submitLabelEditor();
-                if (ev.key === 'Escape') setLabelEditor(null);
-              }}
-            />
-          </div>
-          <div style={styles.popupRow}>
-            <label style={styles.checkLabel}>
+        <>
+          {isSmall && <div className={popupStyles.sheetBackdrop} onClick={closePopups} />}
+          <div
+            className={isSmall ? popupStyles.bottomSheet : popupStyles.popup}
+            style={isSmall ? undefined : {
+              left: Math.min(labelEditor.screenX + 12, canvasW - 220),
+              top: labelEditor.screenY + 16,
+            }}
+          >
+            {isSmall && <div className={popupStyles.dragHandle} />}
+            <div className={popupStyles.popupRow}>
+              <label className={popupStyles.popupLabel}>Label</label>
               <input
-                type="checkbox"
-                checked={labelEditor.isRoom}
-                onChange={(ev) => setLabelEditor({ ...labelEditor, isRoom: ev.target.checked })}
-              />
-              <span>Is room</span>
-            </label>
-          </div>
-          {labelEditor.isRoom && (
-            <div style={styles.popupRow}>
-              <label style={styles.popupLabel}>Category</label>
-              <input
-                style={styles.popupInput}
-                placeholder="e.g. bathroom"
-                value={labelEditor.category}
-                onChange={(ev) => setLabelEditor({ ...labelEditor, category: ev.target.value })}
+                className={clsx(popupStyles.popupInput, isSmall && popupStyles.popupInputSheet)}
+                autoFocus
+                value={labelEditor.label}
+                onChange={(ev) => setLabelEditor({ ...labelEditor, label: ev.target.value })}
                 onKeyDown={(ev) => {
                   if (ev.key === 'Enter') submitLabelEditor();
                   if (ev.key === 'Escape') setLabelEditor(null);
                 }}
               />
             </div>
-          )}
-          <div style={styles.popupRow}>
-            <label style={styles.checkLabel}>
-              <input
-                type="checkbox"
-                checked={labelEditor.isConnector}
-                onChange={(ev) => setLabelEditor({ ...labelEditor, isConnector: ev.target.checked })}
-              />
-              <span>Is connector</span>
-            </label>
+            <div className={popupStyles.popupRow}>
+              <label className={popupStyles.checkLabel}>
+                <input
+                  type="checkbox"
+                  checked={labelEditor.isRoom}
+                  onChange={(ev) => setLabelEditor({ ...labelEditor, isRoom: ev.target.checked })}
+                />
+                <span>Is room</span>
+              </label>
+            </div>
+            {labelEditor.isRoom && (
+              <div className={popupStyles.popupRow}>
+                <label className={popupStyles.popupLabel}>Category</label>
+                <input
+                  className={clsx(popupStyles.popupInput, isSmall && popupStyles.popupInputSheet)}
+                  placeholder="e.g. bathroom"
+                  value={labelEditor.category}
+                  onChange={(ev) => setLabelEditor({ ...labelEditor, category: ev.target.value })}
+                  onKeyDown={(ev) => {
+                    if (ev.key === 'Enter') submitLabelEditor();
+                    if (ev.key === 'Escape') setLabelEditor(null);
+                  }}
+                />
+              </div>
+            )}
+            <div className={popupStyles.popupRow}>
+              <label className={popupStyles.checkLabel}>
+                <input
+                  type="checkbox"
+                  checked={labelEditor.isConnector}
+                  onChange={(ev) => setLabelEditor({ ...labelEditor, isConnector: ev.target.checked })}
+                />
+                <span>Is connector</span>
+              </label>
+            </div>
+            <div className={popupStyles.popupActions}>
+              <button className={popupStyles.popupBtn} onClick={() => setLabelEditor(null)}>Cancel</button>
+              <button className={clsx(popupStyles.popupBtn, popupStyles.popupBtnPrimary)} onClick={submitLabelEditor}>
+                Save
+              </button>
+            </div>
           </div>
-          <div style={{ ...styles.popupRow, justifyContent: 'flex-end', gap: 6 }}>
-            <button style={styles.popupBtn} onClick={() => setLabelEditor(null)}>Cancel</button>
-            <button style={{ ...styles.popupBtn, ...styles.popupBtnPrimary }} onClick={submitLabelEditor}>
-              Save
-            </button>
-          </div>
-        </div>
+        </>
       )}
 
-      {/* Edge editor popup */}
+      {/* Edge editor popup / bottom sheet */}
       {edgeEditor && (
-        <div
-          style={{
-            ...styles.popup,
-            left: Math.min(edgeEditor.screenX + 8, canvasW - 200),
-            top: edgeEditor.screenY + 8,
-          }}
-        >
-          <div style={{ ...styles.popupRow, flexWrap: 'wrap', gap: 4 }}>
-            {ALL_EDGE_TYPES.map((t) => {
-              const currentEdge = building.edges.find((e) => e.id === edgeEditor.edgeId);
-              const isActive = currentEdge?.type === t;
-              return (
-                <button
-                  key={t}
-                  style={{
-                    ...styles.edgeTypeBtn,
-                    borderColor: EDGE_COLORS[t],
-                    color: isActive ? '#fff' : EDGE_COLORS[t],
-                    background: isActive ? EDGE_COLORS[t] : 'transparent',
-                  }}
-                  onClick={() => handleEdgeTypeChange(t)}
-                >
-                  {EDGE_LABELS[t]}
-                </button>
-              );
-            })}
+        <>
+          {isSmall && <div className={popupStyles.sheetBackdrop} onClick={closePopups} />}
+          <div
+            className={isSmall ? popupStyles.bottomSheet : popupStyles.popup}
+            style={isSmall ? undefined : {
+              left: Math.min(edgeEditor.screenX + 8, canvasW - 200),
+              top: edgeEditor.screenY + 8,
+            }}
+          >
+            {isSmall && <div className={popupStyles.dragHandle} />}
+            <div className={popupStyles.edgeTypeBtnRow}>
+              {ALL_EDGE_TYPES.map((t) => {
+                const currentEdge = building.edges.find((e) => e.id === edgeEditor.edgeId);
+                const isActive = currentEdge?.type === t;
+                return (
+                  <button
+                    key={t}
+                    className={popupStyles.edgeTypeBtn}
+                    style={{
+                      borderColor: EDGE_COLORS[t],
+                      color: isActive ? '#fff' : EDGE_COLORS[t],
+                      background: isActive ? EDGE_COLORS[t] : 'transparent',
+                    }}
+                    onClick={() => handleEdgeTypeChange(t)}
+                  >
+                    {EDGE_LABELS[t]}
+                  </button>
+                );
+              })}
+            </div>
+            <div className={popupStyles.popupActions}>
+              <button className={clsx(popupStyles.popupBtn, popupStyles.popupBtnDanger)} onClick={handleDeleteEdge}>
+                Delete Edge
+              </button>
+            </div>
           </div>
-          <div style={{ ...styles.popupRow, justifyContent: 'flex-end' }}>
-            <button style={{ ...styles.popupBtn, ...styles.popupBtnDanger }} onClick={handleDeleteEdge}>
-              Delete Edge
-            </button>
-          </div>
-        </div>
+        </>
       )}
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
-
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    position: 'relative',
-    width: '100%',
-  },
-  placeholder: {
-    position: 'absolute',
-    inset: 0,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: '#555',
-    fontSize: 18,
-    pointerEvents: 'none',
-    zIndex: 1,
-  },
-  popup: {
-    position: 'absolute',
-    background: '#1e1e1e',
-    border: '1px solid #444',
-    borderRadius: 6,
-    padding: '10px 12px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
-    zIndex: 10,
-    minWidth: 190,
-    boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
-  },
-  popupRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-  },
-  popupLabel: {
-    fontSize: 12,
-    color: '#aaa',
-    width: 40,
-    flexShrink: 0,
-  },
-  popupInput: {
-    flex: 1,
-    background: '#111',
-    border: '1px solid #444',
-    borderRadius: 3,
-    color: '#eee',
-    padding: '3px 6px',
-    fontSize: 13,
-    outline: 'none',
-  },
-  checkLabel: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    fontSize: 13,
-    color: '#ccc',
-    cursor: 'pointer',
-  },
-  popupBtn: {
-    padding: '3px 10px',
-    borderRadius: 3,
-    border: '1px solid #444',
-    background: 'transparent',
-    color: '#ccc',
-    cursor: 'pointer',
-    fontSize: 12,
-  },
-  popupBtnPrimary: {
-    borderColor: '#378ADD',
-    color: '#378ADD',
-  },
-  popupBtnDanger: {
-    borderColor: '#D85A30',
-    color: '#D85A30',
-  },
-  edgeTypeBtn: {
-    padding: '3px 8px',
-    borderRadius: 10,
-    border: '1px solid',
-    background: 'transparent',
-    cursor: 'pointer',
-    fontSize: 12,
-    fontWeight: 500,
-  },
-};

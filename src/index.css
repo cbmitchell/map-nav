@@ -35,6 +35,10 @@
   /* Layout */
   --sidebar-width: 220px;
   --topbar-height: 48px;
+
+  /* Breakpoints (reference only — @media can't use var()) */
+  --breakpoint-mobile: 640px;
+  --breakpoint-tablet: 1024px;
 }
 
 *, *::before, *::after {
@@ -48,4 +52,10 @@ html, body, #root {
   font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
   background: var(--bg-base);
   color: var(--text-primary);
+}
+
+canvas {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }

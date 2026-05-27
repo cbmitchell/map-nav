@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import clsx from 'clsx';
 import type { Building } from '../../types/graph';
+import { useMobile } from '../../hooks/useMobile';
 import styles from './NavigatorControls.module.css';
 
 interface NavigatorControlsProps {
@@ -35,6 +36,7 @@ export function NavigatorControls({
   onDirectionsToggle,
 }: NavigatorControlsProps) {
   const [destMode, setDestMode] = useState<'room' | 'category'>('room');
+  const { isMobile } = useMobile();
 
   const rooms = building.nodes.filter((n) => n.isRoom);
 
@@ -108,7 +110,7 @@ export function NavigatorControls({
               disabled={knownCategories.length === 0}
               onClick={() => handleDestModeChange('category')}
             >
-              Nearest in category
+              {isMobile ? 'Nearest' : 'Nearest in category'}
             </button>
           </div>
         </div>

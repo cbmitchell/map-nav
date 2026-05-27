@@ -112,3 +112,9 @@
   border-radius: 4px;
   border: 1px solid rgba(216, 90, 48, 0.3);
 }
+
+@media (max-width: 640px) {
+  .selectIndented {
+    margin-left: 0;
+  }
+}

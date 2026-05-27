@@ -11,20 +11,21 @@ export interface RenderedPage {
   imageH: number;
 }
 
-export async function getPageCount(file: File): Promise<number> {
-  const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  return pdf.numPages;
+export type PdfDocument = pdfjsLib.PDFDocumentProxy;
+
+export async function loadPdf(file: File): Promise<PdfDocument> {
+  const data = await file.arrayBuffer();
+  // PDF.js transfers the ArrayBuffer to its worker (detaching it), so we load
+  // the document once here and callers reuse the document object.
+  return pdfjsLib.getDocument({ data }).promise;
 }
 
 export async function renderPdfPage(
-  file: File,
+  doc: PdfDocument,
   pageNum: number = 1,
   scale: number = 2,
 ): Promise<RenderedPage> {
-  const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  const page = await pdf.getPage(pageNum);
+  const page = await doc.getPage(pageNum);
   const viewport = page.getViewport({ scale });
 
   const canvas = document.createElement('canvas');

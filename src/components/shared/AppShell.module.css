@@ -46,3 +46,10 @@
   flex: 1;
   overflow: hidden;
 }
+
+@media (max-width: 640px) {
+  .modeBtn {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+}

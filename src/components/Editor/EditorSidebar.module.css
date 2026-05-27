@@ -8,6 +8,55 @@
   overflow: hidden;
 }
 
+.sidebarDrawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 280px;
+  z-index: 200;
+  transform: translateX(-100%);
+  transition: transform 0.25s ease;
+}
+
+.sidebarOpen {
+  transform: translateX(0);
+}
+
+.backdrop {
+  display: none;
+}
+
+.backdropVisible {
+  display: block;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 199;
+}
+
+.closeRow {
+  display: none;
+}
+
+.closeRowVisible {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 10px;
+  flex-shrink: 0;
+}
+
+.closeBtn {
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
 .sectionHeader {
   font-size: 10px;
   font-weight: 600;
@@ -224,4 +273,23 @@
   cursor: pointer;
   font-size: 14px;
   line-height: 1;
+}
+
+@media (max-width: 1024px) {
+  .sectionItem {
+    padding: 11px 12px;
+  }
+
+  .sectionItemActive {
+    padding-left: 9px;
+  }
+
+  .formInput {
+    padding: 8px 8px;
+    font-size: 16px;
+  }
+
+  .formInputNarrow {
+    width: 64px;
+  }
 }

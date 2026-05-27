@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import { Editor } from '../Editor/Editor';
 import { Navigator } from '../Navigator/Navigator';
 import { ErrorBoundary } from './ErrorBoundary';
+import { useMobile } from '../../hooks/useMobile';
 import styles from './AppShell.module.css';
 
 type AppMode = 'editor' | 'navigator';
@@ -19,6 +20,7 @@ function loadMode(): AppMode {
 
 export function AppShell() {
   const [mode, setMode] = useState<AppMode>(loadMode);
+  const { isMobile } = useMobile();
 
   useEffect(() => {
     try { localStorage.setItem(MODE_KEY, mode); } catch { /* ignore */ }
@@ -27,7 +29,7 @@ export function AppShell() {
   return (
     <div className={styles.shell}>
       <header className={styles.topBar}>
-        <span className={styles.appName}>Office Navigator</span>
+        <span className={styles.appName}>{isMobile ? 'Mapper' : 'Office Navigator'}</span>
         <div className={styles.modeToggle}>
           <button
             className={clsx(styles.modeBtn, mode === 'editor' && styles.modeBtnActive)}

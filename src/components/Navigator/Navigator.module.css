@@ -43,3 +43,9 @@
   flex: 1;
   overflow: auto;
 }
+
+@media (max-width: 1024px) {
+  .stepBtn {
+    padding: 8px 12px;
+  }
+}

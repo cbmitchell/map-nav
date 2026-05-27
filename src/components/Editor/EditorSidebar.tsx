@@ -3,7 +3,8 @@ import clsx from 'clsx';
 import type { Dispatch } from 'react';
 import type { Building } from '../../types/graph';
 import type { Action } from '../../hooks/useGraphReducer';
-import { renderPdfPage, getPageCount } from '../../utils/pdf';
+import { loadPdf, renderPdfPage } from '../../utils/pdf';
+import { generateId } from '../../utils/id';
 import styles from './EditorSidebar.module.css';
 
 interface EditorSidebarProps {
@@ -11,6 +12,9 @@ interface EditorSidebarProps {
   activeSectionId: string | null;
   onSectionChange: (id: string) => void;
   dispatch: Dispatch<Action>;
+  isMobileOrTablet: boolean;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -105,7 +109,7 @@ interface FormState {
   file: File | null;
 }
 
-export function EditorSidebar({ building, activeSectionId, onSectionChange, dispatch }: EditorSidebarProps) {
+export function EditorSidebar({ building, activeSectionId, onSectionChange, dispatch, isMobileOrTablet, isOpen, onClose }: EditorSidebarProps) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<FormState>({ name: '', floor: '', file: null });
   const [importing, setImporting] = useState(false);
@@ -132,8 +136,11 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
       const floor = parseInt(form.floor, 10) || 1;
       const file = form.file;
 
-      if (file.type === 'application/pdf') {
-        const count = await getPageCount(file);
+      if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+        // Load document once — PDF.js transfers the ArrayBuffer to its worker,
+        // detaching it, so calling getDocument twice on the same buffer would fail.
+        const doc = await loadPdf(file);
+        const count = doc.numPages;
         const importAll =
           count > 1 &&
           window.confirm(
@@ -142,8 +149,8 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
         const pages = importAll ? Array.from({ length: count }, (_, i) => i + 1) : [1];
         let firstId: string | null = null;
         for (let i = 0; i < pages.length; i++) {
-          const { imageData, imageW, imageH } = await renderPdfPage(file, pages[i]);
-          const id = crypto.randomUUID();
+          const { imageData, imageW, imageH } = await renderPdfPage(doc, pages[i]);
+          const id = generateId();
           const sectionName = pages.length > 1 ? (i === 0 ? name : `${name} – Page ${pages[i]}`) : name;
           dispatch({
             type: 'ADD_SECTION',
@@ -159,7 +166,7 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
             const imageData = ev.target?.result as string;
             const img = new Image();
             img.onload = () => {
-              const id = crypto.randomUUID();
+              const id = generateId();
               dispatch({
                 type: 'ADD_SECTION',
                 payload: { id, name, floor, imageData, imageW: img.naturalWidth, imageH: img.naturalHeight },
@@ -174,6 +181,8 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
           reader.readAsDataURL(file);
         });
       }
+    } catch (err) {
+      window.alert(`Failed to add section: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setImporting(false);
       setShowForm(false);
@@ -222,7 +231,15 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
   const sectionIndex = new Map(building.sections.map((s) => [s.id, s]));
 
   return (
-    <div className={styles.sidebar}>
+    <>
+      <div
+        className={clsx(styles.backdrop, isMobileOrTablet && isOpen && styles.backdropVisible)}
+        onClick={onClose}
+      />
+      <div className={clsx(styles.sidebar, isMobileOrTablet && styles.sidebarDrawer, isMobileOrTablet && isOpen && styles.sidebarOpen)}>
+        <div className={clsx(styles.closeRow, isMobileOrTablet && styles.closeRowVisible)}>
+          <button className={styles.closeBtn} onClick={onClose}>✕</button>
+        </div>
       <div className={styles.sectionHeader}>Sections</div>
 
       <div className={styles.sectionList}>
@@ -230,7 +247,7 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
           <div key={s.id}>
             <div
               className={clsx(styles.sectionItem, s.id === activeSectionId && styles.sectionItemActive)}
-              onClick={() => { if (editingSectionId !== s.id) onSectionChange(s.id); }}
+              onClick={() => { if (editingSectionId !== s.id) { onSectionChange(s.id); if (isMobileOrTablet) onClose(); } }}
             >
               <span className={styles.sectionName}>{s.name}</span>
               <span className={styles.sectionFloor}>F{s.floor}</span>
@@ -329,7 +346,8 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
           </div>
         </>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 

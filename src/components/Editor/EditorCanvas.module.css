@@ -1,0 +1,154 @@
+.container {
+  position: relative;
+  width: 100%;
+}
+
+.placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-ghost);
+  font-size: 18px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Positioned popup (desktop) */
+.popup {
+  position: absolute;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 10;
+  min-width: 190px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+/* Bottom sheet (mobile/tablet) */
+.bottomSheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-raised);
+  border-top: 1px solid var(--border-strong);
+  border-radius: 12px 12px 0 0;
+  padding: 16px 20px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 300;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.6);
+}
+
+.dragHandle {
+  width: 40px;
+  height: 4px;
+  background: var(--border-strong);
+  border-radius: 2px;
+  margin: 0 auto 4px;
+}
+
+.sheetBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 299;
+}
+
+.popupRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.popupLabel {
+  font-size: 12px;
+  color: var(--text-muted);
+  width: 40px;
+  flex-shrink: 0;
+}
+
+.popupInput {
+  flex: 1;
+  background: var(--bg-dark);
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  color: #eee;
+  padding: 3px 6px;
+  font-size: 13px;
+  outline: none;
+}
+
+.popupInputSheet {
+  padding: 10px 8px;
+  font-size: 16px;
+}
+
+.checkLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.popupBtn {
+  padding: 3px 10px;
+  border-radius: 3px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.popupBtnPrimary {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+.popupBtnDanger {
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+}
+
+.edgeTypeBtnRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.edgeTypeBtn {
+  padding: 3px 8px;
+  border-radius: 10px;
+  border: 1px solid;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.popupActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+@media (max-width: 1024px) {
+  .popupBtn {
+    padding: 8px 14px;
+    font-size: 14px;
+  }
+
+  .edgeTypeBtn {
+    padding: 8px 14px;
+  }
+}

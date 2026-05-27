@@ -2,6 +2,7 @@ import { useReducer, useEffect, useLayoutEffect, useRef, useCallback } from 'rea
 import type { Building, Section, Node, Edge, EdgeType } from '../types/graph';
 import { euclideanWeight } from '../utils/geometry';
 import { FIXED_WEIGHTS } from '../utils/pathfinding';
+import { generateId } from '../utils/id';
 
 // ---------------------------------------------------------------------------
 // Action types
@@ -94,7 +95,7 @@ function reducer(state: Building, action: Action): Building {
     }
 
     case 'ADD_NODE': {
-      const node: Node = { ...action.payload, id: crypto.randomUUID() };
+      const node: Node = { ...action.payload, id: generateId() };
       return { ...state, nodes: [...state.nodes, node] };
     }
 
@@ -120,7 +121,7 @@ function reducer(state: Building, action: Action): Building {
     }
 
     case 'ADD_EDGE': {
-      const edge: Edge = { ...action.payload, id: crypto.randomUUID() };
+      const edge: Edge = { ...action.payload, id: generateId() };
       return { ...state, edges: [...state.edges, edge] };
     }
 
@@ -159,7 +160,7 @@ function reducer(state: Building, action: Action): Building {
       if (!src || !tgt) return state;
 
       const newNode: Node = {
-        id: crypto.randomUUID(),
+        id: generateId(),
         sectionId: src.sectionId,
         nx,
         ny,
@@ -189,8 +190,8 @@ function reducer(state: Building, action: Action): Building {
         nodes: [...state.nodes, newNode],
         edges: [
           ...state.edges.filter((e) => e.id !== edgeId),
-          { id: crypto.randomUUID(), srcId: edge.srcId, tgtId: newNode.id, type: edge.type, weight: w1, crossSection: false },
-          { id: crypto.randomUUID(), srcId: newNode.id, tgtId: edge.tgtId, type: edge.type, weight: w2, crossSection: false },
+          { id: generateId(), srcId: edge.srcId, tgtId: newNode.id, type: edge.type, weight: w1, crossSection: false },
+          { id: generateId(), srcId: newNode.id, tgtId: edge.tgtId, type: edge.type, weight: w2, crossSection: false },
         ],
       };
     }

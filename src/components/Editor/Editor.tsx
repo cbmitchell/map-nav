@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useGraphReducer } from '../../hooks/useGraphReducer';
 import { useZoomPan, DEFAULT_ZOOM_PAN } from '../../hooks/useZoomPan';
+import { useMobile } from '../../hooks/useMobile';
 import styles from './Editor.module.css';
 import type { ZoomPanState } from '../../hooks/useZoomPan';
 import { DEFAULT_EDITOR_STATE } from '../../types/editor';
@@ -14,6 +15,9 @@ const EDGE_TYPE_KEYS: EdgeType[] = ['walkway', 'stairs', 'elevator', 'ramp', 'br
 
 export function Editor() {
   const { state, dispatch, undo } = useGraphReducer();
+  const { isMobile, isTablet } = useMobile();
+  const isMobileOrTablet = isMobile || isTablet;
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   // preferredSectionId: explicitly chosen by user; falls back to first available section
   const [preferredSectionId, setActiveSectionId] = useState<string | null>(null);
   const activeSectionId = preferredSectionId ?? state.sections[0]?.id ?? null;
@@ -156,6 +160,7 @@ export function Editor() {
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
         onResetView={resetView}
+        onSidebarToggle={() => setSidebarOpen((p) => !p)}
       />
       <div className={styles.body}>
         <EditorSidebar
@@ -163,6 +168,9 @@ export function Editor() {
           activeSectionId={activeSectionId}
           onSectionChange={handleSectionChange}
           dispatch={dispatch}
+          isMobileOrTablet={isMobileOrTablet}
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
         />
         <div className={styles.canvasArea}>
           {state.sections.length === 0 ? (
