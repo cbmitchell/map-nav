@@ -66,6 +66,7 @@ export function EditorToolbar({
         const imageData = ev.target?.result as string;
         const img = new Image();
         img.onload = () => dispatchImage(imageData, img.naturalWidth, img.naturalHeight);
+        img.onerror = () => alert('Failed to load image. The file may be corrupt or unsupported.');
         img.src = imageData;
       };
       reader.readAsDataURL(file);

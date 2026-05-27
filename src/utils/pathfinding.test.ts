@@ -25,6 +25,11 @@ describe('dijkstra', () => {
     expect(dijkstra(nodes, edges, 'A', 'A', new Set())).toEqual(['A']);
   });
 
+  it('returns null when src === tgt but the node does not exist in the graph', () => {
+    const nodes = [node('A')];
+    expect(dijkstra(nodes, [], 'ghost', 'ghost', new Set())).toBeNull();
+  });
+
   it('finds a simple linear path A → B → C', () => {
     const nodes = [node('A'), node('B'), node('C')];
     const edges = [edge('e1', 'A', 'B', 1), edge('e2', 'B', 'C', 1)];

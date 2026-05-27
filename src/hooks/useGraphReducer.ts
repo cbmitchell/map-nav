@@ -1,4 +1,4 @@
-import { useReducer, useEffect, useRef, useCallback } from 'react';
+import { useReducer, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import type { Building, Section, Node, Edge, EdgeType } from '../types/graph';
 import { euclideanWeight } from '../utils/geometry';
 import { FIXED_WEIGHTS } from '../utils/pathfinding';
@@ -135,8 +135,10 @@ function reducer(state: Building, action: Action): Building {
             const src = state.nodes.find((n) => n.id === merged.srcId);
             const tgt = state.nodes.find((n) => n.id === merged.tgtId);
             if (src && tgt) {
-              // Use a 800px reference canvas for type-change weight recalc
-              merged.weight = edgeWeight(merged.type, src, tgt, 800, 800);
+              const section = state.sections.find((s) => s.id === src.sectionId);
+              const W = section?.imageW ?? 1;
+              const H = section?.imageH ?? 1;
+              merged.weight = edgeWeight(merged.type, src, tgt, W, H);
             }
           }
           return merged;
@@ -213,7 +215,7 @@ export function useGraphReducer() {
 
   const undoStack = useRef<Building[]>([]);
   const stateRef = useRef(state);
-  stateRef.current = state;
+  useLayoutEffect(() => { stateRef.current = state; });
 
   // Stable dispatch wrapper that snapshots state before each mutation
   const dispatch = useCallback((action: Action) => {

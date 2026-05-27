@@ -28,12 +28,14 @@ export function NavigatorCanvas({
   const spaceRef = useRef(false);
   const touchRef = useRef<{ lastX: number; lastY: number; lastDist: number } | null>(null);
   const zoomPanRef = useRef(zoomPan);
-  zoomPanRef.current = zoomPan;
-
   const buildingRef = useRef(building);
-  buildingRef.current = building;
   const activeSectionIdRef = useRef(activeSectionId);
-  activeSectionIdRef.current = activeSectionId;
+
+  useLayoutEffect(() => {
+    zoomPanRef.current = zoomPan;
+    buildingRef.current = building;
+    activeSectionIdRef.current = activeSectionId;
+  });
 
   const { redraw } = useCanvasRenderer(
     canvasRef,
@@ -67,7 +69,6 @@ export function NavigatorCanvas({
     const observer = new ResizeObserver(updateSize);
     observer.observe(container);
     return () => observer.disconnect();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSectionId, building.sections, redraw]);
 
   // Wheel zoom (non-passive)
@@ -85,10 +86,14 @@ export function NavigatorCanvas({
   // Space key pan mode
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && !e.repeat && !(e.target instanceof HTMLInputElement)) {
+      if (e.code === 'Space' && !(e.target instanceof HTMLInputElement)) {
+        // Always suppress Space default on non-input elements — prevents a focused
+        // <select> from toggling open on repeated keydown events while panning
         e.preventDefault();
-        spaceRef.current = true;
-        if (canvasRef.current) canvasRef.current.style.cursor = 'grab';
+        if (!e.repeat) {
+          spaceRef.current = true;
+          if (canvasRef.current) canvasRef.current.style.cursor = 'grab';
+        }
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {

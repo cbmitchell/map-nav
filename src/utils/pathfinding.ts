@@ -17,7 +17,9 @@ export function dijkstra(
   tgtId: string,
   excludedTypes: Set<EdgeType>,
 ): string[] | null {
-  if (srcId === tgtId) return [srcId];
+  if (srcId === tgtId) {
+    return nodes.some((n) => n.id === srcId) ? [srcId] : null;
+  }
 
   // Build adjacency list (undirected)
   const adj = new Map<string, { neighborId: string; weight: number }[]>();

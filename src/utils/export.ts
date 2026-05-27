@@ -6,6 +6,12 @@ interface ExportBundle {
   building: Building;
 }
 
+function isValidBuilding(b: unknown): b is Building {
+  if (!b || typeof b !== 'object') return false;
+  const obj = b as Record<string, unknown>;
+  return Array.isArray(obj.sections) && Array.isArray(obj.nodes) && Array.isArray(obj.edges);
+}
+
 export function exportBuilding(building: Building): void {
   const bundle: ExportBundle = {
     version: 1,
@@ -19,7 +25,8 @@ export function exportBuilding(building: Building): void {
   a.href = url;
   a.download = 'office-navigator.json';
   a.click();
-  URL.revokeObjectURL(url);
+  // Defer revocation so the browser has time to initiate the download
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export async function importBuilding(file: File): Promise<Building> {
@@ -27,12 +34,16 @@ export async function importBuilding(file: File): Promise<Building> {
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
-        const bundle = JSON.parse(ev.target?.result as string) as ExportBundle;
-        if (bundle.version === undefined) {
+        const raw = JSON.parse(ev.target?.result as string) as Record<string, unknown>;
+        if (raw.version === undefined) {
           reject(new Error('Invalid file: missing version field'));
           return;
         }
-        resolve(bundle.building);
+        if (!isValidBuilding(raw.building)) {
+          reject(new Error('Invalid file: building data is missing or malformed'));
+          return;
+        }
+        resolve(raw.building);
       } catch {
         reject(new Error('Failed to parse file'));
       }

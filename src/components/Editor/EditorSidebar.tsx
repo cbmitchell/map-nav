@@ -11,7 +11,93 @@ interface EditorSidebarProps {
   dispatch: Dispatch<Action>;
 }
 
-interface NewSectionForm {
+// ---------------------------------------------------------------------------
+// Shared section form
+// ---------------------------------------------------------------------------
+
+interface SectionFormProps {
+  name: string;
+  floor: string;
+  file: File | null;
+  onNameChange: (v: string) => void;
+  onFloorChange: (v: string) => void;
+  onFileChange: (f: File | null) => void;
+  onSubmit: () => void;
+  onCancel: () => void;
+  submitLabel: string;
+  submitting: boolean;
+  submitDisabled: boolean;
+  filePlaceholder: string;
+  fileAccept: string;
+  autoFocus?: boolean;
+}
+
+function SectionForm({
+  name, floor, file,
+  onNameChange, onFloorChange, onFileChange,
+  onSubmit, onCancel,
+  submitLabel, submitting, submitDisabled,
+  filePlaceholder, fileAccept,
+  autoFocus = false,
+}: SectionFormProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') onSubmit();
+    if (e.key === 'Escape') onCancel();
+    e.stopPropagation();
+  };
+
+  return (
+    <>
+      <input
+        style={styles.formInput}
+        autoFocus={autoFocus}
+        placeholder="Section name"
+        value={name}
+        onChange={(e) => onNameChange(e.target.value)}
+        onKeyDown={handleKey}
+      />
+      <div style={styles.formRow}>
+        <label style={styles.formLabel}>Floor</label>
+        <input
+          style={{ ...styles.formInput, width: 52 }}
+          type="number"
+          min={1}
+          value={floor}
+          onChange={(e) => onFloorChange(e.target.value)}
+          onKeyDown={handleKey}
+        />
+      </div>
+      <button style={styles.fileBtn} onClick={() => fileInputRef.current?.click()}>
+        {file ? file.name : filePlaceholder}
+      </button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={fileAccept}
+        style={{ display: 'none' }}
+        onChange={(e) => onFileChange(e.target.files?.[0] ?? null)}
+      />
+      <div style={styles.formActions}>
+        <button style={styles.cancelBtn} onClick={onCancel}>Cancel</button>
+        <button
+          style={{ ...styles.addBtn, ...(submitDisabled ? styles.btnDisabled : {}) }}
+          disabled={submitDisabled}
+          onClick={onSubmit}
+        >
+          {submitting ? `${submitLabel}…` : submitLabel}
+        </button>
+      </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sidebar
+// ---------------------------------------------------------------------------
+
+interface FormState {
   name: string;
   floor: string;
   file: File | null;
@@ -19,23 +105,12 @@ interface NewSectionForm {
 
 export function EditorSidebar({ building, activeSectionId, onSectionChange, dispatch }: EditorSidebarProps) {
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<NewSectionForm>({ name: '', floor: '', file: null });
+  const [form, setForm] = useState<FormState>({ name: '', floor: '', file: null });
   const [importing, setImporting] = useState(false);
+
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const startRename = (id: string, currentName: string) => {
-    setEditingSectionId(id);
-    setEditingName(currentName);
-  };
-
-  const commitRename = () => {
-    if (editingSectionId && editingName.trim()) {
-      dispatch({ type: 'UPDATE_SECTION', payload: { id: editingSectionId, name: editingName.trim() } });
-    }
-    setEditingSectionId(null);
-  };
+  const [editForm, setEditForm] = useState<FormState>({ name: '', floor: '', file: null });
+  const [editImporting, setEditImporting] = useState(false);
 
   const nextFloor =
     building.sections.length > 0
@@ -45,10 +120,6 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
   const openForm = () => {
     setForm({ name: `Floor ${nextFloor}`, floor: String(nextFloor), file: null });
     setShowForm(true);
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm((prev) => ({ ...prev, file: e.target.files?.[0] ?? null }));
   };
 
   const handleSubmit = async () => {
@@ -80,7 +151,7 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
         }
         if (firstId) onSectionChange(firstId);
       } else {
-        await new Promise<void>((resolve) => {
+        await new Promise<void>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = (ev) => {
             const imageData = ev.target?.result as string;
@@ -94,8 +165,10 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
               onSectionChange(id);
               resolve();
             };
+            img.onerror = () => reject(new Error('Image failed to load — file may be corrupt or unsupported.'));
             img.src = imageData;
           };
+          reader.onerror = () => reject(new Error('Failed to read file'));
           reader.readAsDataURL(file);
         });
       }
@@ -103,6 +176,43 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
       setImporting(false);
       setShowForm(false);
     }
+  };
+
+  const startEdit = (id: string, currentName: string, currentFloor: number) => {
+    setEditingSectionId(id);
+    setEditForm({ name: currentName, floor: String(currentFloor), file: null });
+  };
+
+  const commitEdit = async () => {
+    if (!editingSectionId) return;
+    const name = editForm.name.trim();
+    const floor = parseInt(editForm.floor, 10);
+    if (name) {
+      dispatch({ type: 'UPDATE_SECTION', payload: { id: editingSectionId, name, floor: isNaN(floor) ? undefined : floor } });
+    }
+    if (editForm.file) {
+      setEditImporting(true);
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            const imageData = ev.target?.result as string;
+            const img = new Image();
+            img.onload = () => {
+              dispatch({ type: 'UPDATE_SECTION_IMAGE', payload: { id: editingSectionId!, imageData, imageW: img.naturalWidth, imageH: img.naturalHeight } });
+              resolve();
+            };
+            img.onerror = () => reject(new Error('Image failed to load — file may be corrupt or unsupported.'));
+            img.src = imageData;
+          };
+          reader.onerror = () => reject(new Error('Failed to read file'));
+          reader.readAsDataURL(editForm.file!);
+        });
+      } finally {
+        setEditImporting(false);
+      }
+    }
+    setEditingSectionId(null);
   };
 
   const crossEdges = building.edges.filter((e) => e.crossSection);
@@ -115,40 +225,45 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
 
       <div style={styles.sectionList}>
         {building.sections.map((s) => (
-          <div
-            key={s.id}
-            style={{
-              ...styles.sectionItem,
-              ...(s.id === activeSectionId ? styles.sectionItemActive : {}),
-            }}
-            onClick={() => { if (editingSectionId !== s.id) onSectionChange(s.id); }}
-          >
-            {editingSectionId === s.id ? (
-              <input
-                style={styles.renameInput}
-                autoFocus
-                value={editingName}
-                onChange={(e) => setEditingName(e.target.value)}
-                onBlur={commitRename}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') commitRename();
-                  if (e.key === 'Escape') setEditingSectionId(null);
-                  e.stopPropagation();
-                }}
-                onClick={(e) => e.stopPropagation()}
-              />
-            ) : (
+          <div key={s.id}>
+            <div
+              style={{
+                ...styles.sectionItem,
+                ...(s.id === activeSectionId ? styles.sectionItemActive : {}),
+              }}
+              onClick={() => { if (editingSectionId !== s.id) onSectionChange(s.id); }}
+            >
               <span style={styles.sectionName}>{s.name}</span>
-            )}
-            <span style={styles.sectionFloor}>F{s.floor}</span>
-            {editingSectionId !== s.id && (
-              <button
-                style={styles.renameBtn}
-                title="Rename section"
-                onClick={(e) => { e.stopPropagation(); startRename(s.id, s.name); }}
-              >
-                ✎
-              </button>
+              <span style={styles.sectionFloor}>F{s.floor}</span>
+              {editingSectionId !== s.id && (
+                <button
+                  style={styles.renameBtn}
+                  title="Edit section"
+                  onClick={(e) => { e.stopPropagation(); startEdit(s.id, s.name, s.floor); }}
+                >
+                  ✎
+                </button>
+              )}
+            </div>
+            {editingSectionId === s.id && (
+              <div style={styles.editForm}>
+                <SectionForm
+                  name={editForm.name}
+                  floor={editForm.floor}
+                  file={editForm.file}
+                  onNameChange={(v) => setEditForm((p) => ({ ...p, name: v }))}
+                  onFloorChange={(v) => setEditForm((p) => ({ ...p, floor: v }))}
+                  onFileChange={(f) => setEditForm((p) => ({ ...p, file: f }))}
+                  onSubmit={commitEdit}
+                  onCancel={() => setEditingSectionId(null)}
+                  submitLabel="Save"
+                  submitting={editImporting}
+                  submitDisabled={editImporting}
+                  filePlaceholder="Replace image…"
+                  fileAccept="image/*"
+                  autoFocus
+                />
+              </div>
             )}
           </div>
         ))}
@@ -156,45 +271,22 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
 
       {showForm ? (
         <div style={styles.form}>
-          <input
-            style={styles.formInput}
-            placeholder="Section name"
-            value={form.name}
+          <SectionForm
+            name={form.name}
+            floor={form.floor}
+            file={form.file}
+            onNameChange={(v) => setForm((p) => ({ ...p, name: v }))}
+            onFloorChange={(v) => setForm((p) => ({ ...p, floor: v }))}
+            onFileChange={(f) => setForm((p) => ({ ...p, file: f }))}
+            onSubmit={handleSubmit}
+            onCancel={() => setShowForm(false)}
+            submitLabel="Add"
+            submitting={importing}
+            submitDisabled={!form.file || importing}
+            filePlaceholder="Choose image or PDF…"
+            fileAccept="image/*,application/pdf"
             autoFocus
-            onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
           />
-          <div style={styles.formRow}>
-            <label style={styles.formLabel}>Floor</label>
-            <input
-              style={{ ...styles.formInput, width: 52 }}
-              type="number"
-              min={1}
-              value={form.floor}
-              onChange={(e) => setForm((prev) => ({ ...prev, floor: e.target.value }))}
-            />
-          </div>
-          <button style={styles.fileBtn} onClick={() => fileInputRef.current?.click()}>
-            {form.file ? form.file.name : 'Choose image or PDF…'}
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*,application/pdf"
-            style={{ display: 'none' }}
-            onChange={handleFileChange}
-          />
-          <div style={styles.formActions}>
-            <button style={styles.cancelBtn} onClick={() => setShowForm(false)}>
-              Cancel
-            </button>
-            <button
-              style={{ ...styles.addBtn, ...(!form.file || importing ? styles.btnDisabled : {}) }}
-              disabled={!form.file || importing}
-              onClick={handleSubmit}
-            >
-              {importing ? 'Importing…' : 'Add'}
-            </button>
-          </div>
         </div>
       ) : (
         <button style={styles.newSectionBtn} onClick={openForm}>
@@ -297,17 +389,6 @@ const styles: Record<string, React.CSSProperties> = {
     marginLeft: 'auto',
     paddingLeft: 4,
   },
-  renameInput: {
-    flex: 1,
-    background: '#111',
-    border: '1px solid #378ADD',
-    borderRadius: 3,
-    color: '#eee',
-    padding: '1px 4px',
-    fontSize: 13,
-    outline: 'none',
-    minWidth: 0,
-  },
   renameBtn: {
     flexShrink: 0,
     padding: '0 3px',
@@ -334,6 +415,15 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     gap: 6,
+  },
+  editForm: {
+    margin: '0 10px 6px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+    padding: '8px',
+    background: '#141414',
+    borderRadius: 4,
   },
   formRow: {
     display: 'flex',

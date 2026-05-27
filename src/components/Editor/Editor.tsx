@@ -13,29 +13,24 @@ const EDGE_TYPE_KEYS: EdgeType[] = ['walkway', 'stairs', 'elevator', 'ramp', 'br
 
 export function Editor() {
   const { state, dispatch, undo } = useGraphReducer();
-  const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
+  // preferredSectionId: explicitly chosen by user; falls back to first available section
+  const [preferredSectionId, setActiveSectionId] = useState<string | null>(null);
+  const activeSectionId = preferredSectionId ?? state.sections[0]?.id ?? null;
   const [editorState, setEditorState] = useState<EditorState>(DEFAULT_EDITOR_STATE);
   const { zoomPan, zoomIn, zoomOut, resetView, handleWheel, pan, setView } = useZoomPan();
 
   // Per-section zoom retention
   const zoomPerSection = useRef<Record<string, ZoomPanState>>({});
   const zoomPanRef = useRef(zoomPan);
-  zoomPanRef.current = zoomPan;
-
-  // Stable refs for keyboard handler (avoids re-registering on every state change)
   const editorStateRef = useRef(editorState);
-  editorStateRef.current = editorState;
   const dispatchRef = useRef(dispatch);
-  dispatchRef.current = dispatch;
   const undoRef = useRef(undo);
-  undoRef.current = undo;
 
-  // Auto-select first section when one becomes available
-  useEffect(() => {
-    if (!activeSectionId && state.sections.length > 0) {
-      setActiveSectionId(state.sections[0].id);
-    }
-  }, [state.sections, activeSectionId]);
+  // Keep refs in sync after each render (useLayoutEffect keeps render phase pure)
+  useEffect(() => { zoomPanRef.current = zoomPan; });
+  useEffect(() => { editorStateRef.current = editorState; });
+  useEffect(() => { dispatchRef.current = dispatch; });
+  useEffect(() => { undoRef.current = undo; });
 
   // Keyboard shortcuts
   useEffect(() => {

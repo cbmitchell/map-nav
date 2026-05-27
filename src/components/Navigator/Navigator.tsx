@@ -1,10 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useLayoutEffect, useMemo, useCallback, useRef } from 'react';
 import type { EdgeType } from '../../types/graph';
 import { useGraphReducer } from '../../hooks/useGraphReducer';
 import { usePathfinder } from '../../hooks/usePathfinder';
 import { useZoomPan, DEFAULT_ZOOM_PAN } from '../../hooks/useZoomPan';
 import type { ZoomPanState } from '../../hooks/useZoomPan';
-import { useRef } from 'react';
 import { NavigatorControls } from './NavigatorControls';
 import { NavigatorCanvas } from './NavigatorCanvas';
 import { DirectionsPanel } from './DirectionsPanel';
@@ -21,7 +20,22 @@ export function Navigator() {
   // Per-section zoom for navigator (same pattern as editor)
   const zoomPerSection = useRef<Record<string, ZoomPanState>>({});
   const zoomPanRef = useRef(zoomPan);
-  zoomPanRef.current = zoomPan;
+  // Keep a ref for activeSectionId so switchSection can read it without becoming a new function every render
+  const activeSectionIdRef = useRef(activeSectionId);
+  useLayoutEffect(() => {
+    zoomPanRef.current = zoomPan;
+    activeSectionIdRef.current = activeSectionId;
+  });
+
+  // Hoist switchSection before the effect that uses it; read activeSectionId via ref so
+  // this callback stays stable and doesn't cause the srcId effect to re-fire on section changes
+  const switchSection = useCallback((newId: string) => {
+    if (activeSectionIdRef.current) {
+      zoomPerSection.current[activeSectionIdRef.current] = zoomPanRef.current;
+    }
+    setActiveSectionId(newId);
+    setView(zoomPerSection.current[newId] ?? DEFAULT_ZOOM_PAN);
+  }, [setView]);
 
   const excludedTypes = useMemo<Set<EdgeType>>(
     () => (accessibleOnly ? new Set<EdgeType>(['stairs']) : new Set<EdgeType>()),
@@ -30,13 +44,14 @@ export function Navigator() {
 
   const { path, error } = usePathfinder(state, srcId, tgtId, excludedTypes);
 
-  // When origin changes, switch view to its section
-  useEffect(() => {
-    if (!srcId) return;
-    const srcNode = state.nodes.find((n) => n.id === srcId);
-    if (srcNode) switchSection(srcNode.sectionId);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [srcId]);
+  // Wrap setSrcId so that picking a new origin also switches the canvas to that section
+  const handleSrcChange = useCallback((id: string | null) => {
+    setSrcId(id);
+    if (id) {
+      const srcNode = state.nodes.find((n) => n.id === id);
+      if (srcNode) switchSection(srcNode.sectionId);
+    }
+  }, [state.nodes, switchSection]);
 
   // Ordered list of sections that the path visits (deduplicated, in order)
   const pathSections = useMemo(() => {
@@ -52,14 +67,6 @@ export function Navigator() {
     return sections;
   }, [path, state.nodes]);
 
-  const switchSection = (newId: string) => {
-    if (activeSectionId) {
-      zoomPerSection.current[activeSectionId] = zoomPanRef.current;
-    }
-    setActiveSectionId(newId);
-    setView(zoomPerSection.current[newId] ?? DEFAULT_ZOOM_PAN);
-  };
-
   const currentPathSectionIndex = pathSections.indexOf(activeSectionId ?? '');
   const canStepPrev = currentPathSectionIndex > 0;
   const canStepNext = currentPathSectionIndex < pathSections.length - 1 && currentPathSectionIndex !== -1;
@@ -73,7 +80,7 @@ export function Navigator() {
         accessibleOnly={accessibleOnly}
         showDirections={showDirections}
         error={error}
-        onSrcChange={setSrcId}
+        onSrcChange={handleSrcChange}
         onTgtChange={setTgtId}
         onAccessibleToggle={setAccessibleOnly}
         onDirectionsToggle={setShowDirections}

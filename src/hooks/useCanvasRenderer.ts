@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect } from 'react';
+import { useCallback, useLayoutEffect, useRef, useEffect } from 'react';
 import type { RefObject } from 'react';
 import type { Building, EdgeType } from '../types/graph';
 import type { EditorState } from '../types/editor';
@@ -55,12 +55,15 @@ export function useCanvasRenderer(
   const zoomPanRef = useRef(zoomPan);
   const highlightPathRef = useRef(highlightPath);
   const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
+  const redrawRef = useRef<() => void>(() => {});
 
-  buildingRef.current = building;
-  activeSectionIdRef.current = activeSectionId;
-  editorStateRef.current = editorState;
-  zoomPanRef.current = zoomPan;
-  highlightPathRef.current = highlightPath;
+  useLayoutEffect(() => {
+    buildingRef.current = building;
+    activeSectionIdRef.current = activeSectionId;
+    editorStateRef.current = editorState;
+    zoomPanRef.current = zoomPan;
+    highlightPathRef.current = highlightPath;
+  });
 
   const redraw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -105,7 +108,8 @@ export function useCanvasRenderer(
       if (!img || (img as HTMLImageElement & { _src?: string })._src !== section.imageData) {
         img = new Image();
         (img as HTMLImageElement & { _src?: string })._src = section.imageData;
-        img.onload = () => redraw();
+        img.onload = () => redrawRef.current();
+        img.onerror = () => { imageCache.current.delete(cacheKey); };
         img.src = section.imageData;
         imageCache.current.set(cacheKey, img);
       }
@@ -143,11 +147,21 @@ export function useCanvasRenderer(
       y: cy * scale + panY,
     });
 
+    // Build cross-section lookup once to avoid O(nodes × edges) per frame
+    const crossSectionNodeIds = new Set<string>();
+    for (const e of building.edges) {
+      if (e.crossSection) {
+        crossSectionNodeIds.add(e.srcId);
+        crossSectionNodeIds.add(e.tgtId);
+      }
+    }
+
     // 3. Edges
     // When in path mode: draw non-path edges first (dimmed), then path edges on top
     const drawEdge = (edge: typeof sectionEdges[number], isPath: boolean) => {
-      const src = nodeIndex.get(edge.srcId)!;
-      const tgt = nodeIndex.get(edge.tgtId)!;
+      const src = nodeIndex.get(edge.srcId);
+      const tgt = nodeIndex.get(edge.tgtId);
+      if (!src || !tgt) return; // skip orphaned edges (corrupted data guard)
       const { x: sx, y: sy } = toScreen(src.nx * W, src.ny * H);
       const { x: tx, y: ty } = toScreen(tgt.nx * W, tgt.ny * H);
       const isSelected = edge.id === es.selectedEdgeId;
@@ -222,9 +236,7 @@ export function useCanvasRenderer(
     const drawNode = (node: typeof sectionNodes[number], isPath: boolean) => {
       const { x, y } = toScreen(node.nx * W, node.ny * H);
 
-      const hasCrossSection = building.edges.some(
-        (e) => e.crossSection && (e.srcId === node.id || e.tgtId === node.id),
-      );
+      const hasCrossSection = crossSectionNodeIds.has(node.id);
       if (hasCrossSection && !isPathMode) {
         ctx.beginPath();
         ctx.arc(x, y, 12, 0, Math.PI * 2);
@@ -289,6 +301,8 @@ export function useCanvasRenderer(
     // Reset transform
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }, [canvasRef]);
+
+  useLayoutEffect(() => { redrawRef.current = redraw; }, [redraw]);
 
   useEffect(() => {
     redraw();

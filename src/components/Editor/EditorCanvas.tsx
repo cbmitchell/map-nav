@@ -108,7 +108,6 @@ export function EditorCanvas({
     const observer = new ResizeObserver(updateSize);
     observer.observe(container);
     return () => observer.disconnect();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSectionId, building.sections, redraw]);
 
   // Wheel zoom (non-passive so we can preventDefault)
@@ -126,10 +125,14 @@ export function EditorCanvas({
   // Space key for pan mode
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && !e.repeat && !(e.target instanceof HTMLInputElement)) {
+      if (e.code === 'Space' && !(e.target instanceof HTMLInputElement)) {
+        // Always suppress Space default on non-input elements — prevents a focused
+        // <select> from toggling open on repeated keydown events while panning
         e.preventDefault();
-        spaceRef.current = true;
-        if (canvasRef.current) canvasRef.current.style.cursor = 'grab';
+        if (!e.repeat) {
+          spaceRef.current = true;
+          if (canvasRef.current) canvasRef.current.style.cursor = 'grab';
+        }
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
@@ -145,13 +148,11 @@ export function EditorCanvas({
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Canvas cursor based on mode
   useEffect(() => {
     updateCursor();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editorState.mode]);
 
   function updateCursor() {

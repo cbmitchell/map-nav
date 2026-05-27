@@ -1,12 +1,26 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Editor } from '../Editor/Editor';
 import { Navigator } from '../Navigator/Navigator';
 import { ErrorBoundary } from './ErrorBoundary';
 
 type AppMode = 'editor' | 'navigator';
 
+const MODE_KEY = 'office-navigator-mode';
+
+function loadMode(): AppMode {
+  try {
+    const stored = localStorage.getItem(MODE_KEY);
+    if (stored === 'navigator') return 'navigator';
+  } catch { /* ignore */ }
+  return 'editor';
+}
+
 export function AppShell() {
-  const [mode, setMode] = useState<AppMode>('editor');
+  const [mode, setMode] = useState<AppMode>(loadMode);
+
+  useEffect(() => {
+    try { localStorage.setItem(MODE_KEY, mode); } catch { /* ignore */ }
+  }, [mode]);
 
   return (
     <div style={styles.shell}>
