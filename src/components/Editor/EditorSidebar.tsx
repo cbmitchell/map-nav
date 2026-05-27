@@ -1,8 +1,10 @@
 import { useState, useRef } from 'react';
+import clsx from 'clsx';
 import type { Dispatch } from 'react';
 import type { Building } from '../../types/graph';
 import type { Action } from '../../hooks/useGraphReducer';
 import { renderPdfPage, getPageCount } from '../../utils/pdf';
+import styles from './EditorSidebar.module.css';
 
 interface EditorSidebarProps {
   building: Building;
@@ -51,17 +53,17 @@ function SectionForm({
   return (
     <>
       <input
-        style={styles.formInput}
+        className={styles.formInput}
         autoFocus={autoFocus}
         placeholder="Section name"
         value={name}
         onChange={(e) => onNameChange(e.target.value)}
         onKeyDown={handleKey}
       />
-      <div style={styles.formRow}>
-        <label style={styles.formLabel}>Floor</label>
+      <div className={styles.formRow}>
+        <label className={styles.formLabel}>Floor</label>
         <input
-          style={{ ...styles.formInput, width: 52 }}
+          className={clsx(styles.formInput, styles.formInputNarrow)}
           type="number"
           min={1}
           value={floor}
@@ -69,7 +71,7 @@ function SectionForm({
           onKeyDown={handleKey}
         />
       </div>
-      <button style={styles.fileBtn} onClick={() => fileInputRef.current?.click()}>
+      <button className={styles.fileBtn} onClick={() => fileInputRef.current?.click()}>
         {file ? file.name : filePlaceholder}
       </button>
       <input
@@ -79,10 +81,10 @@ function SectionForm({
         style={{ display: 'none' }}
         onChange={(e) => onFileChange(e.target.files?.[0] ?? null)}
       />
-      <div style={styles.formActions}>
-        <button style={styles.cancelBtn} onClick={onCancel}>Cancel</button>
+      <div className={styles.formActions}>
+        <button className={styles.cancelBtn} onClick={onCancel}>Cancel</button>
         <button
-          style={{ ...styles.addBtn, ...(submitDisabled ? styles.btnDisabled : {}) }}
+          className={clsx(styles.addBtn, submitDisabled && styles.btnDisabled)}
           disabled={submitDisabled}
           onClick={onSubmit}
         >
@@ -220,24 +222,21 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
   const sectionIndex = new Map(building.sections.map((s) => [s.id, s]));
 
   return (
-    <div style={styles.sidebar}>
-      <div style={styles.sectionHeader}>Sections</div>
+    <div className={styles.sidebar}>
+      <div className={styles.sectionHeader}>Sections</div>
 
-      <div style={styles.sectionList}>
+      <div className={styles.sectionList}>
         {building.sections.map((s) => (
           <div key={s.id}>
             <div
-              style={{
-                ...styles.sectionItem,
-                ...(s.id === activeSectionId ? styles.sectionItemActive : {}),
-              }}
+              className={clsx(styles.sectionItem, s.id === activeSectionId && styles.sectionItemActive)}
               onClick={() => { if (editingSectionId !== s.id) onSectionChange(s.id); }}
             >
-              <span style={styles.sectionName}>{s.name}</span>
-              <span style={styles.sectionFloor}>F{s.floor}</span>
+              <span className={styles.sectionName}>{s.name}</span>
+              <span className={styles.sectionFloor}>F{s.floor}</span>
               {editingSectionId !== s.id && (
                 <button
-                  style={styles.renameBtn}
+                  className={styles.renameBtn}
                   title="Edit section"
                   onClick={(e) => { e.stopPropagation(); startEdit(s.id, s.name, s.floor); }}
                 >
@@ -246,7 +245,7 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
               )}
             </div>
             {editingSectionId === s.id && (
-              <div style={styles.editForm}>
+              <div className={styles.editForm}>
                 <SectionForm
                   name={editForm.name}
                   floor={editForm.floor}
@@ -270,7 +269,7 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
       </div>
 
       {showForm ? (
-        <div style={styles.form}>
+        <div className={styles.form}>
           <SectionForm
             name={form.name}
             floor={form.floor}
@@ -289,36 +288,36 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
           />
         </div>
       ) : (
-        <button style={styles.newSectionBtn} onClick={openForm}>
+        <button className={styles.newSectionBtn} onClick={openForm}>
           + New Section
         </button>
       )}
 
       {crossEdges.length > 0 && (
         <>
-          <div style={styles.divider} />
-          <div style={styles.sectionHeader}>Cross-section links</div>
-          <div style={styles.crossList}>
+          <div className={styles.divider} />
+          <div className={styles.sectionHeader}>Cross-section links</div>
+          <div className={styles.crossList}>
             {crossEdges.map((edge) => {
               const src = nodeIndex.get(edge.srcId);
               const tgt = nodeIndex.get(edge.tgtId);
               const srcSec = src ? sectionIndex.get(src.sectionId) : undefined;
               const tgtSec = tgt ? sectionIndex.get(tgt.sectionId) : undefined;
               return (
-                <div key={edge.id} style={styles.crossItem}>
-                  <span style={styles.crossLabel}>
-                    <span style={styles.crossSec}>{srcSec?.name ?? '?'}</span>
+                <div key={edge.id} className={styles.crossItem}>
+                  <span className={styles.crossLabel}>
+                    <span className={styles.crossSec}>{srcSec?.name ?? '?'}</span>
                     {': '}
                     {src?.label || '(node)'}
                     {' → '}
-                    <span style={styles.crossSec}>{tgtSec?.name ?? '?'}</span>
+                    <span className={styles.crossSec}>{tgtSec?.name ?? '?'}</span>
                     {': '}
                     {tgt?.label || '(node)'}
                     {'  '}
-                    <span style={styles.crossType}>{edge.type}</span>
+                    <span className={styles.crossType}>{edge.type}</span>
                   </span>
                   <button
-                    style={styles.deleteBtn}
+                    className={styles.deleteBtn}
                     title="Delete link"
                     onClick={() => dispatch({ type: 'DELETE_EDGE', payload: { id: edge.id } })}
                   >
@@ -334,202 +333,3 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  sidebar: {
-    width: 220,
-    flexShrink: 0,
-    background: '#0e0e0e',
-    borderRight: '1px solid #2a2a2a',
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden',
-  },
-  sectionHeader: {
-    fontSize: 10,
-    fontWeight: 600,
-    letterSpacing: '0.08em',
-    textTransform: 'uppercase' as const,
-    color: '#555',
-    padding: '10px 12px 4px',
-    flexShrink: 0,
-  },
-  sectionList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 1,
-    flexShrink: 0,
-  },
-  sectionItem: {
-    display: 'flex',
-    alignItems: 'center',
-    padding: '7px 12px',
-    background: 'transparent',
-    cursor: 'pointer',
-    color: '#888',
-    fontSize: 13,
-    gap: 4,
-    userSelect: 'none' as const,
-  },
-  sectionItemActive: {
-    background: '#1e1e1e',
-    color: '#eee',
-    borderLeft: '2px solid #378ADD',
-    paddingLeft: 10,
-  },
-  sectionName: {
-    flex: 1,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap' as const,
-  },
-  sectionFloor: {
-    fontSize: 10,
-    color: '#555',
-    flexShrink: 0,
-    marginLeft: 'auto',
-    paddingLeft: 4,
-  },
-  renameBtn: {
-    flexShrink: 0,
-    padding: '0 3px',
-    background: 'transparent',
-    border: 'none',
-    color: '#444',
-    cursor: 'pointer',
-    fontSize: 13,
-    lineHeight: 1,
-  },
-  newSectionBtn: {
-    margin: '6px 10px',
-    padding: '5px 10px',
-    background: 'transparent',
-    border: '1px dashed #333',
-    borderRadius: 4,
-    color: '#555',
-    cursor: 'pointer',
-    fontSize: 12,
-    textAlign: 'left' as const,
-  },
-  form: {
-    margin: '6px 10px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 6,
-  },
-  editForm: {
-    margin: '0 10px 6px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 6,
-    padding: '8px',
-    background: '#141414',
-    borderRadius: 4,
-  },
-  formRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-  },
-  formLabel: {
-    fontSize: 11,
-    color: '#666',
-    flexShrink: 0,
-  },
-  formInput: {
-    flex: 1,
-    background: '#111',
-    border: '1px solid #333',
-    borderRadius: 3,
-    color: '#ddd',
-    padding: '4px 6px',
-    fontSize: 12,
-    outline: 'none',
-    minWidth: 0,
-  },
-  fileBtn: {
-    padding: '4px 8px',
-    background: 'transparent',
-    border: '1px solid #333',
-    borderRadius: 3,
-    color: '#888',
-    cursor: 'pointer',
-    fontSize: 11,
-    textAlign: 'left' as const,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap' as const,
-  },
-  formActions: {
-    display: 'flex',
-    justifyContent: 'flex-end',
-    gap: 6,
-  },
-  cancelBtn: {
-    padding: '3px 10px',
-    background: 'transparent',
-    border: '1px solid #333',
-    borderRadius: 3,
-    color: '#666',
-    cursor: 'pointer',
-    fontSize: 12,
-  },
-  addBtn: {
-    padding: '3px 10px',
-    background: 'transparent',
-    border: '1px solid #378ADD',
-    borderRadius: 3,
-    color: '#378ADD',
-    cursor: 'pointer',
-    fontSize: 12,
-  },
-  btnDisabled: {
-    opacity: 0.4,
-    cursor: 'not-allowed',
-  },
-  divider: {
-    height: 1,
-    background: '#1e1e1e',
-    margin: '8px 0',
-    flexShrink: 0,
-  },
-  crossList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 4,
-    padding: '0 8px',
-    overflow: 'auto',
-    flex: 1,
-  },
-  crossItem: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: 4,
-    padding: '4px 6px',
-    background: '#141414',
-    borderRadius: 3,
-    fontSize: 11,
-  },
-  crossLabel: {
-    flex: 1,
-    color: '#888',
-    lineHeight: 1.4,
-    wordBreak: 'break-word' as const,
-  },
-  crossSec: {
-    color: '#bbb',
-  },
-  crossType: {
-    color: '#555',
-    fontStyle: 'italic',
-  },
-  deleteBtn: {
-    flexShrink: 0,
-    padding: '0 4px',
-    background: 'transparent',
-    border: 'none',
-    color: '#555',
-    cursor: 'pointer',
-    fontSize: 14,
-    lineHeight: 1,
-  },
-};

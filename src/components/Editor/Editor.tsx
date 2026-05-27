@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useGraphReducer } from '../../hooks/useGraphReducer';
 import { useZoomPan, DEFAULT_ZOOM_PAN } from '../../hooks/useZoomPan';
+import styles from './Editor.module.css';
 import type { ZoomPanState } from '../../hooks/useZoomPan';
 import { DEFAULT_EDITOR_STATE } from '../../types/editor';
 import type { EditorState, EditorMode } from '../../types/editor';
@@ -142,7 +143,7 @@ export function Editor() {
   const activeSection = state.sections.find((s) => s.id === activeSectionId);
 
   return (
-    <div style={styles.editor}>
+    <div className={styles.editor}>
       <EditorToolbar
         building={state}
         activeSectionId={activeSectionId}
@@ -156,25 +157,25 @@ export function Editor() {
         onZoomOut={handleZoomOut}
         onResetView={resetView}
       />
-      <div style={styles.body}>
+      <div className={styles.body}>
         <EditorSidebar
           building={state}
           activeSectionId={activeSectionId}
           onSectionChange={handleSectionChange}
           dispatch={dispatch}
         />
-        <div style={styles.canvasArea}>
+        <div className={styles.canvasArea}>
           {state.sections.length === 0 ? (
-            <div style={styles.onboarding}>
-              <p style={styles.onboardingTitle}>Get started</p>
-              <ol style={styles.onboardingList}>
+            <div className={styles.onboarding}>
+              <p className={styles.onboardingTitle}>Get started</p>
+              <ol className={styles.onboardingList}>
                 <li>Click <strong>+ New Section</strong> in the left panel and upload a floor map image</li>
                 <li>Switch to <strong>Add Node</strong> mode and click the map to place nodes</li>
                 <li>Switch to <strong>Add Edge</strong> mode, then click two nodes to connect them</li>
                 <li>In <strong>Select</strong> mode, double-click a node to label it and mark it as a Room</li>
                 <li>Switch to <strong>Navigator</strong> mode to find paths between rooms</li>
               </ol>
-              <p style={styles.onboardingHint}>
+              <p className={styles.onboardingHint}>
                 Keyboard shortcuts: <kbd>S</kbd> Select · <kbd>N</kbd> Node · <kbd>E</kbd> Edge · <kbd>Del</kbd> Delete · <kbd>Esc</kbd> Cancel · <kbd>1</kbd>–<kbd>5</kbd> Edge type · <kbd>Ctrl+Z</kbd> Undo
               </p>
             </div>
@@ -198,43 +199,3 @@ export function Editor() {
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  editor: {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100%',
-  },
-  body: {
-    display: 'flex',
-    flex: 1,
-    overflow: 'hidden',
-  },
-  canvasArea: {
-    flex: 1,
-    overflow: 'auto',
-  },
-  onboarding: {
-    maxWidth: 520,
-    margin: '60px auto',
-    padding: '0 24px',
-    color: '#888',
-  },
-  onboardingTitle: {
-    fontSize: 18,
-    fontWeight: 600,
-    color: '#bbb',
-    marginBottom: 16,
-  },
-  onboardingList: {
-    fontSize: 14,
-    lineHeight: 2,
-    paddingLeft: 20,
-    color: '#777',
-  },
-  onboardingHint: {
-    marginTop: 24,
-    fontSize: 12,
-    color: '#555',
-    lineHeight: 1.8,
-  },
-};

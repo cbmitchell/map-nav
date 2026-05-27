@@ -1,6 +1,8 @@
 import { useState, useLayoutEffect, useMemo, useCallback, useRef } from 'react';
+import clsx from 'clsx';
 import type { EdgeType } from '../../types/graph';
 import { useGraphReducer } from '../../hooks/useGraphReducer';
+import styles from './Navigator.module.css';
 import { usePathfinder } from '../../hooks/usePathfinder';
 import { useZoomPan, DEFAULT_ZOOM_PAN } from '../../hooks/useZoomPan';
 import type { ZoomPanState } from '../../hooks/useZoomPan';
@@ -93,7 +95,7 @@ export function Navigator() {
   const canStepNext = currentPathSectionIndex < pathSections.length - 1 && currentPathSectionIndex !== -1;
 
   return (
-    <div style={styles.navigator}>
+    <div className={styles.navigator}>
       <NavigatorControls
         building={state}
         srcId={srcId}
@@ -112,23 +114,23 @@ export function Navigator() {
 
       {/* Multi-section step indicator */}
       {pathSections.length > 1 && (
-        <div style={styles.stepBar}>
+        <div className={styles.stepBar}>
           <button
-            style={{ ...styles.stepBtn, ...(!canStepPrev ? styles.stepBtnDisabled : {}) }}
+            className={clsx(styles.stepBtn, !canStepPrev && styles.stepBtnDisabled)}
             disabled={!canStepPrev}
             onClick={() => switchSection(pathSections[currentPathSectionIndex - 1])}
           >
             ← Prev
           </button>
-          <span style={styles.stepLabel}>
+          <span className={styles.stepLabel}>
             {state.sections.find((s) => s.id === activeSectionId)?.name ?? '—'}
             {' '}
-            <span style={styles.stepCount}>
+            <span className={styles.stepCount}>
               ({currentPathSectionIndex === -1 ? '?' : currentPathSectionIndex + 1}/{pathSections.length})
             </span>
           </span>
           <button
-            style={{ ...styles.stepBtn, ...(!canStepNext ? styles.stepBtnDisabled : {}) }}
+            className={clsx(styles.stepBtn, !canStepNext && styles.stepBtnDisabled)}
             disabled={!canStepNext}
             onClick={() => switchSection(pathSections[currentPathSectionIndex + 1])}
           >
@@ -137,7 +139,7 @@ export function Navigator() {
         </div>
       )}
 
-      <div style={styles.canvasArea}>
+      <div className={styles.canvasArea}>
         <NavigatorCanvas
           building={state}
           activeSectionId={activeSectionId}
@@ -156,44 +158,3 @@ export function Navigator() {
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  navigator: {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100%',
-  },
-  stepBar: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '6px 14px',
-    background: '#111',
-    borderBottom: '1px solid #2a2a2a',
-    flexShrink: 0,
-  },
-  stepBtn: {
-    padding: '3px 12px',
-    background: 'transparent',
-    border: '1px solid #444',
-    borderRadius: 4,
-    color: '#ccc',
-    cursor: 'pointer',
-    fontSize: 12,
-  },
-  stepBtnDisabled: {
-    opacity: 0.35,
-    cursor: 'not-allowed',
-  },
-  stepLabel: {
-    fontSize: 13,
-    color: '#ddd',
-  },
-  stepCount: {
-    fontSize: 11,
-    color: '#666',
-  },
-  canvasArea: {
-    flex: 1,
-    overflow: 'auto',
-  },
-};

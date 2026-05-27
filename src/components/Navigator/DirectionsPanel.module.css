@@ -1,0 +1,33 @@
+.panel {
+  background: var(--bg-deepest);
+  border-top: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.header {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-ghost);
+  padding: 8px 14px 4px;
+  position: sticky;
+  top: 0;
+  background: var(--bg-deepest);
+}
+
+.list {
+  margin: 0;
+  padding: 0 14px 10px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.step {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}

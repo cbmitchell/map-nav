@@ -1,0 +1,48 @@
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  height: var(--topbar-height);
+  background: var(--bg-dark);
+  border-bottom: 1px solid var(--border-default);
+  flex-shrink: 0;
+}
+
+.appName {
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: 0.02em;
+}
+
+.modeToggle {
+  display: flex;
+  gap: 4px;
+}
+
+.modeBtn {
+  padding: 4px 16px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.modeBtnActive {
+  background: var(--bg-overlay);
+  color: var(--text-bright);
+  border-color: var(--border-active);
+}
+
+.main {
+  flex: 1;
+  overflow: hidden;
+}

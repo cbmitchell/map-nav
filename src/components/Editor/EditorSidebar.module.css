@@ -1,0 +1,227 @@
+.sidebar {
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+  background: var(--bg-deepest);
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sectionHeader {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-ghost);
+  padding: 10px 12px 4px;
+  flex-shrink: 0;
+}
+
+.sectionList {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex-shrink: 0;
+}
+
+.sectionItem {
+  display: flex;
+  align-items: center;
+  padding: 7px 12px;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-dim);
+  font-size: 13px;
+  gap: 4px;
+  user-select: none;
+}
+
+.sectionItemActive {
+  background: var(--bg-raised);
+  color: #eee;
+  border-left: 2px solid var(--accent-blue);
+  padding-left: 10px;
+}
+
+.sectionName {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sectionFloor {
+  font-size: 10px;
+  color: var(--text-ghost);
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-left: 4px;
+}
+
+.renameBtn {
+  flex-shrink: 0;
+  padding: 0 3px;
+  background: transparent;
+  border: none;
+  color: var(--border-strong);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.newSectionBtn {
+  margin: 6px 10px;
+  padding: 5px 10px;
+  background: transparent;
+  border: 1px dashed var(--border-default);
+  border-radius: 4px;
+  color: var(--text-ghost);
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+}
+
+.form {
+  margin: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.editForm {
+  margin: 0 10px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--bg-card);
+  border-radius: 4px;
+}
+
+.formRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.formLabel {
+  font-size: 11px;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.formInput {
+  flex: 1;
+  background: var(--bg-dark);
+  border: 1px solid var(--border-default);
+  border-radius: 3px;
+  color: #ddd;
+  padding: 4px 6px;
+  font-size: 12px;
+  outline: none;
+  min-width: 0;
+}
+
+.formInputNarrow {
+  flex: none;
+  width: 52px;
+}
+
+.fileBtn {
+  padding: 4px 8px;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 3px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 11px;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.cancelBtn {
+  padding: 3px 10px;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 3px;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.addBtn {
+  padding: 3px 10px;
+  background: transparent;
+  border: 1px solid var(--accent-blue);
+  border-radius: 3px;
+  color: var(--accent-blue);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.btnDisabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.divider {
+  height: 1px;
+  background: var(--bg-raised);
+  margin: 8px 0;
+  flex-shrink: 0;
+}
+
+.crossList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 8px;
+  overflow: auto;
+  flex: 1;
+}
+
+.crossItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 4px 6px;
+  background: var(--bg-card);
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.crossLabel {
+  flex: 1;
+  color: var(--text-dim);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.crossSec {
+  color: #bbb;
+}
+
+.crossType {
+  color: var(--text-ghost);
+  font-style: italic;
+}
+
+.deleteBtn {
+  flex-shrink: 0;
+  padding: 0 4px;
+  background: transparent;
+  border: none;
+  color: var(--text-ghost);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}

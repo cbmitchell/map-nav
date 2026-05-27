@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import clsx from 'clsx';
 import { renderPdfPage } from '../../utils/pdf';
 import type { Dispatch } from 'react';
 import type { Building, Section } from '../../types/graph';
@@ -8,6 +9,7 @@ import type { Action } from '../../hooks/useGraphReducer';
 import { EDGE_COLORS, EDGE_LABELS } from '../../hooks/useCanvasRenderer';
 import { FIXED_WEIGHTS } from '../../utils/pathfinding';
 import { exportBuilding, importBuilding } from '../../utils/export';
+import styles from './EditorToolbar.module.css';
 
 const ALL_EDGE_TYPES: EdgeType[] = ['walkway', 'stairs', 'elevator', 'ramp', 'bridge'];
 
@@ -97,18 +99,18 @@ export function EditorToolbar({
   const hasSelection = editorState.selectedNodeId !== null || editorState.selectedEdgeId !== null;
 
   return (
-    <div style={styles.toolbar}>
+    <div className={styles.toolbar}>
       {/* Current section name */}
       {activeSection && (
-        <span style={styles.sectionName}>{activeSection.name}</span>
+        <span className={styles.sectionName}>{activeSection.name}</span>
       )}
 
       {/* Mode buttons */}
-      <div style={styles.group}>
+      <div className={styles.group}>
         {(['select', 'node', 'edge'] as EditorMode[]).map((m) => (
           <button
             key={m}
-            style={{ ...styles.btn, ...(editorState.mode === m ? styles.btnActive : {}) }}
+            className={clsx(styles.btn, editorState.mode === m && styles.btnActive)}
             onClick={() => setMode(m)}
           >
             {m === 'select' ? 'Select' : m === 'node' ? 'Add Node' : 'Add Edge'}
@@ -116,15 +118,15 @@ export function EditorToolbar({
         ))}
       </div>
 
-      <div style={styles.divider} />
+      <div className={styles.divider} />
 
-      {/* Edge type selector */}
-      <div style={styles.group}>
+      {/* Edge type selector — colors are dynamic (EDGE_COLORS lookup), so stay inline */}
+      <div className={styles.group}>
         {ALL_EDGE_TYPES.map((t) => (
           <button
             key={t}
+            className={styles.edgeTypeBtn}
             style={{
-              ...styles.edgeTypeBtn,
               borderColor: EDGE_COLORS[t],
               color: editorState.currentEdgeType === t ? '#fff' : EDGE_COLORS[t],
               background: editorState.currentEdgeType === t ? EDGE_COLORS[t] : 'transparent',
@@ -134,32 +136,32 @@ export function EditorToolbar({
             {EDGE_LABELS[t]}
           </button>
         ))}
-        <span style={styles.weightHint}>{weightHint}</span>
+        <span className={styles.weightHint}>{weightHint}</span>
       </div>
 
-      <div style={styles.divider} />
+      <div className={styles.divider} />
 
       {/* Action buttons */}
-      <div style={styles.group}>
+      <div className={styles.group}>
         <button
-          style={{ ...styles.btn, ...(hasSelection ? styles.btnDanger : styles.btnDisabled) }}
+          className={clsx(styles.btn, hasSelection ? styles.btnDanger : styles.btnDisabled)}
           disabled={!hasSelection}
           onClick={onDelete}
         >
           Delete
         </button>
         <button
-          style={{ ...styles.btn, ...(!activeSectionId ? styles.btnDisabled : {}) }}
+          className={clsx(styles.btn, !activeSectionId && styles.btnDisabled)}
           disabled={!activeSectionId}
           onClick={handleUploadClick}
         >
           Replace Image
         </button>
-        <button style={styles.btn} onClick={handleImportClick}>
+        <button className={styles.btn} onClick={handleImportClick}>
           Import JSON
         </button>
         <button
-          style={{ ...styles.btn, ...(building.sections.length === 0 ? styles.btnDisabled : {}) }}
+          className={clsx(styles.btn, building.sections.length === 0 && styles.btnDisabled)}
           disabled={building.sections.length === 0}
           onClick={() => exportBuilding(building)}
         >
@@ -167,26 +169,26 @@ export function EditorToolbar({
         </button>
       </div>
 
-      <div style={styles.divider} />
+      <div className={styles.divider} />
 
       {/* Zoom controls */}
-      <div style={styles.group}>
-        <button style={styles.btn} onClick={onZoomOut} title="Zoom out">−</button>
-        <span style={styles.zoomLabel}>{Math.round(scale * 100)}%</span>
-        <button style={styles.btn} onClick={onZoomIn} title="Zoom in">+</button>
-        <button style={styles.btn} onClick={onResetView} title="Reset view">Reset</button>
+      <div className={styles.group}>
+        <button className={styles.btn} onClick={onZoomOut} title="Zoom out">−</button>
+        <span className={styles.zoomLabel}>{Math.round(scale * 100)}%</span>
+        <button className={styles.btn} onClick={onZoomIn} title="Zoom in">+</button>
+        <button className={styles.btn} onClick={onResetView} title="Reset view">Reset</button>
       </div>
 
-      {/* Pending cross-section link banner (Phase 3) */}
+      {/* Pending cross-section link banner */}
       {editorState.mode === 'link' && editorState.pendingLinkSrc && (
-        <div style={styles.linkBanner}>
+        <div className={styles.linkBanner}>
           {(() => {
             const srcNode = building.nodes.find((n) => n.id === editorState.pendingLinkSrc?.nodeId);
             const srcSection = building.sections.find((s) => s.id === editorState.pendingLinkSrc?.sectionId);
             return `Linking from "${srcNode?.label || 'node'}" on ${srcSection?.name || 'section'} — switch to target section and click a connector node.`;
           })()}
           <button
-            style={styles.cancelBtn}
+            className={styles.cancelBtn}
             onClick={() => onEditorStateChange({ mode: 'select', pendingLinkSrc: null })}
           >
             Cancel
@@ -212,100 +214,3 @@ export function EditorToolbar({
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  toolbar: {
-    display: 'flex',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-    padding: '6px 12px',
-    background: '#111',
-    borderBottom: '1px solid #333',
-    flexShrink: 0,
-    minHeight: 44,
-  },
-  group: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 4,
-  },
-  divider: {
-    width: 1,
-    height: 24,
-    background: '#333',
-    margin: '0 4px',
-  },
-  btn: {
-    padding: '4px 12px',
-    borderRadius: 4,
-    border: '1px solid #444',
-    background: 'transparent',
-    color: '#ccc',
-    cursor: 'pointer',
-    fontSize: 13,
-    whiteSpace: 'nowrap' as const,
-  },
-  btnActive: {
-    background: '#2a2a2a',
-    color: '#fff',
-    borderColor: '#888',
-  },
-  btnDanger: {
-    borderColor: '#D85A30',
-    color: '#D85A30',
-  },
-  btnDisabled: {
-    opacity: 0.4,
-    cursor: 'not-allowed',
-  },
-  edgeTypeBtn: {
-    padding: '3px 10px',
-    borderRadius: 12,
-    border: '1px solid',
-    background: 'transparent',
-    cursor: 'pointer',
-    fontSize: 12,
-    fontWeight: 500,
-  },
-  weightHint: {
-    fontSize: 11,
-    color: '#666',
-    marginLeft: 4,
-  },
-  zoomLabel: {
-    fontSize: 12,
-    color: '#888',
-    minWidth: 38,
-    textAlign: 'center' as const,
-  },
-  sectionName: {
-    fontSize: 12,
-    color: '#666',
-    paddingRight: 4,
-    whiteSpace: 'nowrap' as const,
-    maxWidth: 160,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  },
-  linkBanner: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    padding: '4px 10px',
-    background: '#1a1a2e',
-    border: '1px solid #534AB7',
-    borderRadius: 4,
-    fontSize: 12,
-    color: '#a89fef',
-    marginLeft: 'auto',
-  },
-  cancelBtn: {
-    padding: '2px 8px',
-    borderRadius: 3,
-    border: '1px solid #534AB7',
-    background: 'transparent',
-    color: '#a89fef',
-    cursor: 'pointer',
-    fontSize: 12,
-  },
-};

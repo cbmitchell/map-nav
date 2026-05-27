@@ -1,4 +1,5 @@
 import type { Building } from '../../types/graph';
+import styles from './DirectionsPanel.module.css';
 
 interface DirectionsPanelProps {
   building: Building;
@@ -58,11 +59,11 @@ export function DirectionsPanel({ building, path }: DirectionsPanelProps) {
   }
 
   return (
-    <div style={styles.panel}>
-      <div style={styles.header}>Directions</div>
-      <ol style={styles.list}>
+    <div className={styles.panel}>
+      <div className={styles.header}>Directions</div>
+      <ol className={styles.list}>
         {steps.map((step, i) => (
-          <li key={i} style={{ ...styles.step, ...kindStyle(step.kind) }}>
+          <li key={i} className={styles.step} style={kindStyle(step.kind)}>
             {step.label}
           </li>
         ))}
@@ -87,35 +88,3 @@ function kindStyle(kind: WaypointStep['kind']): React.CSSProperties {
   }
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  panel: {
-    background: '#0e0e0e',
-    borderTop: '1px solid #2a2a2a',
-    flexShrink: 0,
-    maxHeight: 220,
-    overflowY: 'auto' as const,
-  },
-  header: {
-    fontSize: 10,
-    fontWeight: 600,
-    letterSpacing: '0.08em',
-    textTransform: 'uppercase' as const,
-    color: '#555',
-    padding: '8px 14px 4px',
-    position: 'sticky' as const,
-    top: 0,
-    background: '#0e0e0e',
-  },
-  list: {
-    margin: 0,
-    padding: '0 14px 10px 30px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 6,
-  },
-  step: {
-    fontSize: 14,
-    color: '#aaa',
-    lineHeight: 1.6,
-  },
-};

@@ -1,0 +1,45 @@
+.navigator {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.stepBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 14px;
+  background: var(--bg-dark);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.stepBtn {
+  padding: 3px 12px;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.stepBtnDisabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.stepLabel {
+  font-size: 13px;
+  color: #ddd;
+}
+
+.stepCount {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.canvasArea {
+  flex: 1;
+  overflow: auto;
+}
