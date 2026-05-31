@@ -1,6 +1,6 @@
 import type { EdgeType } from './graph';
 
-export type EditorMode = 'select' | 'node' | 'edge' | 'link';
+export type EditorMode = 'select' | 'node' | 'edge' | 'link' | 'calibrate';
 
 export interface EditorState {
   mode: EditorMode;
@@ -10,6 +10,8 @@ export interface EditorState {
   pendingEdgeSrcId: string | null;
   pendingLinkSrc: { nodeId: string; sectionId: string } | null;
   mousePos: { x: number; y: number } | null;
+  calibrateA: { nx: number; ny: number } | null;
+  calibrateB: { nx: number; ny: number } | null;
 }
 
 export const DEFAULT_EDITOR_STATE: EditorState = {
@@ -20,4 +22,6 @@ export const DEFAULT_EDITOR_STATE: EditorState = {
   pendingEdgeSrcId: null,
   pendingLinkSrc: null,
   mousePos: null,
+  calibrateA: null,
+  calibrateB: null,
 };

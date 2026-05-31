@@ -1,19 +1,17 @@
 import { useRef, useState, useLayoutEffect, useEffect } from 'react';
 import clsx from 'clsx';
 import type { Dispatch } from 'react';
-import type { Building, EdgeType, Node } from '../../types/graph';
+import type { Building, Node } from '../../types/graph';
 import type { EditorState } from '../../types/editor';
 import type { Action } from '../../hooks/useGraphReducer';
 import type { ZoomPanState } from '../../hooks/useZoomPan';
 import { screenToCanvas } from '../../hooks/useZoomPan';
-import { useCanvasRenderer, EDGE_COLORS, EDGE_LABELS } from '../../hooks/useCanvasRenderer';
+import { useCanvasRenderer } from '../../hooks/useCanvasRenderer';
 import { distanceToSegment, px2norm } from '../../utils/geometry';
-import { FIXED_WEIGHTS } from '../../utils/pathfinding';
+import { computeEdgeWeight } from '../../utils/pathfinding';
 import { euclideanWeight } from '../../utils/geometry';
 import { useMobile } from '../../hooks/useMobile';
 import popupStyles from './EditorCanvas.module.css';
-
-const ALL_EDGE_TYPES: EdgeType[] = ['walkway', 'stairs', 'elevator', 'ramp', 'bridge'];
 
 // ---------------------------------------------------------------------------
 // Inline popup types
@@ -33,6 +31,12 @@ interface EdgeEditorState {
   edgeId: string;
   screenX: number;
   screenY: number;
+}
+
+interface CalibratePopupState {
+  a: { nx: number; ny: number };
+  b: { nx: number; ny: number };
+  distance: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -81,6 +85,7 @@ export function EditorCanvas({
 
   const [labelEditor, setLabelEditor] = useState<LabelEditorState | null>(null);
   const [edgeEditor, setEdgeEditor] = useState<EdgeEditorState | null>(null);
+  const [calibratePopup, setCalibratePopup] = useState<CalibratePopupState | null>(null);
 
   const { redraw } = useCanvasRenderer(canvasRef, building, activeSectionId, editorState, zoomPan);
 
@@ -176,7 +181,7 @@ export function EditorCanvas({
     const canvas = canvasRef.current;
     if (!canvas) return;
     if (spaceRef.current) { canvas.style.cursor = panRef.current ? 'grabbing' : 'grab'; return; }
-    const map: Record<string, string> = { select: 'default', node: 'crosshair', edge: 'cell', link: 'crosshair' };
+    const map: Record<string, string> = { select: 'default', node: 'crosshair', edge: 'cell', link: 'crosshair', calibrate: 'crosshair' };
     canvas.style.cursor = map[esRef.current.mode] ?? 'default';
   }
 
@@ -337,8 +342,12 @@ export function EditorCanvas({
           const srcNode = nodeIndex.get(es.pendingEdgeSrcId);
           if (!srcNode) return;
           const type = es.currentEdgeType;
-          const fixed = FIXED_WEIGHTS[type];
-          const weight = fixed !== undefined ? fixed : euclideanWeight(srcNode, node, W, H);
+          const typeDef = buildingRef.current.edgeTypes.find((t) => t.id === type);
+          const activeSection = buildingRef.current.sections.find((s) => s.id === activeSectionIdRef.current);
+          const imgW = activeSection?.imageW ?? W;
+          const imgH = activeSection?.imageH ?? H;
+          const sectionScale = activeSection?.scale ?? 1.0;
+          const weight = typeDef ? computeEdgeWeight(typeDef, srcNode, node, imgW, imgH, sectionScale) : euclideanWeight(srcNode, node, imgW, imgH) * sectionScale;
           dispatch({
             type: 'ADD_EDGE',
             payload: { srcId: es.pendingEdgeSrcId, tgtId: node.id, type, weight, crossSection: false },
@@ -355,7 +364,8 @@ export function EditorCanvas({
         if (hitNodeScreen(screen.x, screen.y, node)) {
           if (!node.isConnector) return; // only connector nodes can be cross-section targets
           const type = es.currentEdgeType;
-          const weight = FIXED_WEIGHTS[type] ?? 100;
+          const typeDef = buildingRef.current.edgeTypes.find((t) => t.id === type);
+          const weight = typeDef?.weightMode === 'fixed' ? typeDef.fixedWeight : 100;
           dispatch({
             type: 'ADD_EDGE',
             payload: {
@@ -372,6 +382,19 @@ export function EditorCanvas({
       }
       // Clicked empty space — cancel link
       onEditorStateChange({ mode: 'select', pendingLinkSrc: null });
+    }
+
+    if (es.mode === 'calibrate' && !calibratePopup) {
+      const norm = px2norm(x, y, W, H);
+      const clampedNx = Math.max(0, Math.min(1, norm.x));
+      const clampedNy = Math.max(0, Math.min(1, norm.y));
+      if (!es.calibrateA) {
+        onEditorStateChange({ calibrateA: { nx: clampedNx, ny: clampedNy } });
+      } else {
+        const b = { nx: clampedNx, ny: clampedNy };
+        onEditorStateChange({ calibrateB: b, mousePos: null });
+        setCalibratePopup({ a: es.calibrateA, b, distance: '' });
+      }
     }
   };
 
@@ -394,7 +417,7 @@ export function EditorCanvas({
     const es = esRef.current;
 
     // Rubber-band preview: store mouse in content coords
-    if (es.mode === 'edge') {
+    if (es.mode === 'edge' || (es.mode === 'calibrate' && es.calibrateA && !calibratePopup)) {
       onEditorStateChange({ mousePos: { x, y } });
     }
 
@@ -447,7 +470,7 @@ export function EditorCanvas({
   };
 
   const handleMouseLeave = () => {
-    if (esRef.current.mode === 'edge') {
+    if (esRef.current.mode === 'edge' || esRef.current.mode === 'calibrate') {
       onEditorStateChange({ mousePos: null });
     }
     if (panRef.current && !spaceRef.current) {
@@ -565,8 +588,12 @@ export function EditorCanvas({
           const srcNode = nodeIndex.get(es.pendingEdgeSrcId);
           if (!srcNode) return;
           const type = es.currentEdgeType;
-          const fixed = FIXED_WEIGHTS[type];
-          const weight = fixed !== undefined ? fixed : euclideanWeight(srcNode, node, W, H);
+          const typeDef = buildingRef.current.edgeTypes.find((t) => t.id === type);
+          const activeSection = buildingRef.current.sections.find((s) => s.id === activeSectionIdRef.current);
+          const imgW = activeSection?.imageW ?? W;
+          const imgH = activeSection?.imageH ?? H;
+          const sectionScale = activeSection?.scale ?? 1.0;
+          const weight = typeDef ? computeEdgeWeight(typeDef, srcNode, node, imgW, imgH, sectionScale) : euclideanWeight(srcNode, node, imgW, imgH) * sectionScale;
           dispatch({ type: 'ADD_EDGE', payload: { srcId: es.pendingEdgeSrcId, tgtId: node.id, type, weight, crossSection: false } });
           onEditorStateChange({ pendingEdgeSrcId: null });
           return;
@@ -580,13 +607,27 @@ export function EditorCanvas({
         if (hitNodeScreen(sx, sy, node)) {
           if (!node.isConnector) return;
           const type = es.currentEdgeType;
-          const weight = FIXED_WEIGHTS[type] ?? 100;
+          const typeDef = buildingRef.current.edgeTypes.find((t) => t.id === type);
+          const weight = typeDef?.weightMode === 'fixed' ? typeDef.fixedWeight : 100;
           dispatch({ type: 'ADD_EDGE', payload: { srcId: es.pendingLinkSrc.nodeId, tgtId: node.id, type, weight, crossSection: true } });
           onEditorStateChange({ mode: 'select', pendingLinkSrc: null });
           return;
         }
       }
       onEditorStateChange({ mode: 'select', pendingLinkSrc: null });
+    }
+
+    if (es.mode === 'calibrate' && !calibratePopup) {
+      const norm = px2norm(x, y, W, H);
+      const clampedNx = Math.max(0, Math.min(1, norm.x));
+      const clampedNy = Math.max(0, Math.min(1, norm.y));
+      if (!es.calibrateA) {
+        onEditorStateChange({ calibrateA: { nx: clampedNx, ny: clampedNy } });
+      } else {
+        const b = { nx: clampedNx, ny: clampedNy };
+        onEditorStateChange({ calibrateB: b, mousePos: null });
+        setCalibratePopup({ a: es.calibrateA, b, distance: '' });
+      }
     }
   };
 
@@ -606,7 +647,7 @@ export function EditorCanvas({
     const H = contentHRef.current;
     const es = esRef.current;
 
-    if (es.mode === 'edge') {
+    if (es.mode === 'edge' || (es.mode === 'calibrate' && es.calibrateA && !calibratePopup)) {
       onEditorStateChange({ mousePos: { x, y } });
     }
 
@@ -627,7 +668,7 @@ export function EditorCanvas({
   const handleTouchEnd = () => {
     touchRef.current = null;
     dragRef.current = null;
-    if (esRef.current.mode === 'edge') {
+    if (esRef.current.mode === 'edge' || esRef.current.mode === 'calibrate') {
       onEditorStateChange({ mousePos: null });
     }
   };
@@ -652,12 +693,37 @@ export function EditorCanvas({
   };
 
   // ---------------------------------------------------------------------------
+  // Calibration
+  // ---------------------------------------------------------------------------
+
+  const submitCalibration = () => {
+    if (!calibratePopup || !activeSectionId) return;
+    const dist = parseFloat(calibratePopup.distance);
+    if (!isFinite(dist) || dist <= 0) return;
+    const section = building.sections.find((s) => s.id === activeSectionId);
+    if (!section) return;
+    const pixelDist = Math.hypot(
+      (calibratePopup.b.nx - calibratePopup.a.nx) * section.imageW,
+      (calibratePopup.b.ny - calibratePopup.a.ny) * section.imageH,
+    );
+    if (pixelDist === 0) return;
+    dispatch({ type: 'CALIBRATE_SECTION', payload: { sectionId: activeSectionId, scale: dist / pixelDist } });
+    onEditorStateChange({ calibrateA: null, calibrateB: null, mode: 'select' });
+    setCalibratePopup(null);
+  };
+
+  const cancelCalibration = () => {
+    onEditorStateChange({ calibrateA: null, calibrateB: null });
+    setCalibratePopup(null);
+  };
+
+  // ---------------------------------------------------------------------------
   // Edge editor
   // ---------------------------------------------------------------------------
 
-  const handleEdgeTypeChange = (type: EdgeType) => {
+  const handleEdgeTypeChange = (typeId: string) => {
     if (!edgeEditor) return;
-    dispatch({ type: 'UPDATE_EDGE', payload: { id: edgeEditor.edgeId, type } });
+    dispatch({ type: 'UPDATE_EDGE', payload: { id: edgeEditor.edgeId, type: typeId } });
     setEdgeEditor(null);
     onEditorStateChange({ selectedEdgeId: null });
   };
@@ -677,7 +743,7 @@ export function EditorCanvas({
   const hasImage = !!section?.imageData;
   const canvasW = canvasRef.current?.width ?? 400;
 
-  const closePopups = () => { setLabelEditor(null); setEdgeEditor(null); };
+  const closePopups = () => { setLabelEditor(null); setEdgeEditor(null); setCalibratePopup(null); onEditorStateChange({ calibrateA: null, calibrateB: null }); };
 
   return (
     <div ref={containerRef} className={popupStyles.container} onMouseLeave={handleMouseLeave}>
@@ -783,21 +849,21 @@ export function EditorCanvas({
           >
             {isSmall && <div className={popupStyles.dragHandle} />}
             <div className={popupStyles.edgeTypeBtnRow}>
-              {ALL_EDGE_TYPES.map((t) => {
+              {building.edgeTypes.map((typeDef) => {
                 const currentEdge = building.edges.find((e) => e.id === edgeEditor.edgeId);
-                const isActive = currentEdge?.type === t;
+                const isActive = currentEdge?.type === typeDef.id;
                 return (
                   <button
-                    key={t}
+                    key={typeDef.id}
                     className={popupStyles.edgeTypeBtn}
                     style={{
-                      borderColor: EDGE_COLORS[t],
-                      color: isActive ? '#fff' : EDGE_COLORS[t],
-                      background: isActive ? EDGE_COLORS[t] : 'transparent',
+                      borderColor: typeDef.color,
+                      color: isActive ? '#fff' : typeDef.color,
+                      background: isActive ? typeDef.color : 'transparent',
                     }}
-                    onClick={() => handleEdgeTypeChange(t)}
+                    onClick={() => handleEdgeTypeChange(typeDef.id)}
                   >
-                    {EDGE_LABELS[t]}
+                    {typeDef.name}
                   </button>
                 );
               })}
@@ -805,6 +871,46 @@ export function EditorCanvas({
             <div className={popupStyles.popupActions}>
               <button className={clsx(popupStyles.popupBtn, popupStyles.popupBtnDanger)} onClick={handleDeleteEdge}>
                 Delete Edge
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Calibration popup / bottom sheet */}
+      {calibratePopup && (
+        <>
+          {isSmall && <div className={popupStyles.sheetBackdrop} onClick={closePopups} />}
+          <div
+            className={isSmall ? popupStyles.bottomSheet : popupStyles.popup}
+            style={isSmall ? undefined : { left: Math.min(canvasW / 2 - 100, canvasW - 220), top: 60 }}
+          >
+            {isSmall && <div className={popupStyles.dragHandle} />}
+            <div className={popupStyles.popupRow}>
+              <label className={popupStyles.popupLabel}>Distance between points</label>
+              <input
+                className={clsx(popupStyles.popupInput, isSmall && popupStyles.popupInputSheet)}
+                type="number"
+                min="0"
+                step="any"
+                placeholder="e.g. 10"
+                autoFocus
+                value={calibratePopup.distance}
+                onChange={(ev) => setCalibratePopup({ ...calibratePopup, distance: ev.target.value })}
+                onKeyDown={(ev) => {
+                  if (ev.key === 'Enter') submitCalibration();
+                  if (ev.key === 'Escape') cancelCalibration();
+                }}
+              />
+            </div>
+            <div className={popupStyles.popupActions}>
+              <button className={popupStyles.popupBtn} onClick={cancelCalibration}>Cancel</button>
+              <button
+                className={clsx(popupStyles.popupBtn, popupStyles.popupBtnPrimary)}
+                onClick={submitCalibration}
+                disabled={!calibratePopup.distance || parseFloat(calibratePopup.distance) <= 0}
+              >
+                Apply
               </button>
             </div>
           </div>

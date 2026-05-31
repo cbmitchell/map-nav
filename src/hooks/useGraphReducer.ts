@@ -1,7 +1,7 @@
 import { useReducer, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
-import type { Building, Section, Node, Edge, EdgeType } from '../types/graph';
+import type { Building, Section, Node, Edge, EdgeTypeDef } from '../types/graph';
 import { euclideanWeight } from '../utils/geometry';
-import { FIXED_WEIGHTS } from '../utils/pathfinding';
+import { DEFAULT_EDGE_TYPES, CUSTOM_TYPE_COLORS, computeEdgeWeight } from '../utils/pathfinding';
 import { generateId } from '../utils/id';
 
 // ---------------------------------------------------------------------------
@@ -19,6 +19,9 @@ export type Action =
   | { type: 'UPDATE_EDGE'; payload: Partial<Edge> & { id: string } }
   | { type: 'DELETE_EDGE'; payload: { id: string } }
   | { type: 'SPLIT_EDGE'; payload: { edgeId: string; nx: number; ny: number }; canvasW?: number; canvasH?: number }
+  | { type: 'ADD_EDGE_TYPE'; payload: Omit<EdgeTypeDef, 'id' | 'color' | 'dashPattern' | 'isBuiltIn'> }
+  | { type: 'DELETE_EDGE_TYPE'; payload: { id: string } }
+  | { type: 'CALIBRATE_SECTION'; payload: { sectionId: string; scale: number } }
   | { type: 'LOAD_BUILDING'; payload: Building };
 
 // ---------------------------------------------------------------------------
@@ -28,41 +31,54 @@ export type Action =
 const STORAGE_KEY = 'office-navigator-state';
 
 function emptyBuilding(): Building {
-  return { sections: [], nodes: [], edges: [] };
+  return { sections: [], nodes: [], edges: [], edgeTypes: DEFAULT_EDGE_TYPES };
+}
+
+function migrateBuilding(b: Building): Building {
+  if (!b.edgeTypes || b.edgeTypes.length === 0) {
+    return { ...b, edgeTypes: DEFAULT_EDGE_TYPES };
+  }
+  return b;
 }
 
 function loadFromStorage(): Building {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as Building;
+    if (raw) return migrateBuilding(JSON.parse(raw) as Building);
   } catch {
     // ignore
   }
   return emptyBuilding();
 }
 
-function recalcConnectedWalkwayWeights(
+function recalcLengthBasedWeights(
   edges: Edge[],
   nodes: Node[],
+  sections: Section[],
+  edgeTypes: EdgeTypeDef[],
   movedNodeId: string,
-  canvasW: number,
-  canvasH: number,
 ): Edge[] {
   const movedNode = nodes.find((n) => n.id === movedNodeId);
   if (!movedNode) return edges;
+  const section = sections.find((s) => s.id === movedNode.sectionId);
+  const W = section?.imageW ?? 1;
+  const H = section?.imageH ?? 1;
+  const sectionScale = section?.scale ?? 1.0;
+  const typeIndex = new Map(edgeTypes.map((t) => [t.id, t]));
   return edges.map((e) => {
-    if (e.type !== 'walkway' && e.type !== 'ramp') return e;
+    const typeDef = typeIndex.get(e.type);
+    if (!typeDef || typeDef.weightMode !== 'length') return e;
     if (e.srcId !== movedNodeId && e.tgtId !== movedNodeId) return e;
     const otherId = e.srcId === movedNodeId ? e.tgtId : e.srcId;
     const other = nodes.find((n) => n.id === otherId);
     if (!other) return e;
-    return { ...e, weight: euclideanWeight(movedNode, other, canvasW, canvasH) };
+    return { ...e, weight: euclideanWeight(movedNode, other, W, H) * typeDef.lengthScalar * sectionScale };
   });
 }
 
-function edgeWeight(type: EdgeType, src: Node, tgt: Node, canvasW: number, canvasH: number): number {
-  const fixed = FIXED_WEIGHTS[type];
-  return fixed !== undefined ? fixed : euclideanWeight(src, tgt, canvasW, canvasH);
+function nextCustomColor(edgeTypes: EdgeTypeDef[]): string {
+  const usedColors = new Set(edgeTypes.map((t) => t.color));
+  return CUSTOM_TYPE_COLORS.find((c) => !usedColors.has(c)) ?? CUSTOM_TYPE_COLORS[0];
 }
 
 // ---------------------------------------------------------------------------
@@ -103,10 +119,9 @@ function reducer(state: Building, action: Action): Building {
       const { id, ...updates } = action.payload;
       const positionChanged = updates.nx !== undefined || updates.ny !== undefined;
       const updatedNodes = state.nodes.map((n) => (n.id === id ? { ...n, ...updates } : n));
-      const updatedEdges =
-        positionChanged && action.canvasW && action.canvasH
-          ? recalcConnectedWalkwayWeights(state.edges, updatedNodes, id, action.canvasW, action.canvasH)
-          : state.edges;
+      const updatedEdges = positionChanged
+        ? recalcLengthBasedWeights(state.edges, updatedNodes, state.sections, state.edgeTypes, id)
+        : state.edges;
       return { ...state, nodes: updatedNodes, edges: updatedEdges };
     }
 
@@ -127,19 +142,24 @@ function reducer(state: Building, action: Action): Building {
 
     case 'UPDATE_EDGE': {
       const { id, ...updates } = action.payload;
+      const typeIndex = new Map(state.edgeTypes.map((t) => [t.id, t]));
       return {
         ...state,
         edges: state.edges.map((e) => {
           if (e.id !== id) return e;
           const merged = { ...e, ...updates };
           if (updates.type && updates.type !== e.type) {
-            const src = state.nodes.find((n) => n.id === merged.srcId);
-            const tgt = state.nodes.find((n) => n.id === merged.tgtId);
-            if (src && tgt) {
-              const section = state.sections.find((s) => s.id === src.sectionId);
-              const W = section?.imageW ?? 1;
-              const H = section?.imageH ?? 1;
-              merged.weight = edgeWeight(merged.type, src, tgt, W, H);
+            const typeDef = typeIndex.get(merged.type);
+            if (typeDef) {
+              const src = state.nodes.find((n) => n.id === merged.srcId);
+              const tgt = state.nodes.find((n) => n.id === merged.tgtId);
+              if (src && tgt) {
+                const section = state.sections.find((s) => s.id === src.sectionId);
+                const W = section?.imageW ?? 1;
+                const H = section?.imageH ?? 1;
+                const sectionScale = section?.scale ?? 1.0;
+                merged.weight = computeEdgeWeight(typeDef, src, tgt, W, H, sectionScale);
+              }
             }
           }
           return merged;
@@ -169,20 +189,18 @@ function reducer(state: Building, action: Action): Building {
         isConnector: false,
       };
 
-      const fixedWeight = FIXED_WEIGHTS[edge.type];
+      const typeDef = state.edgeTypes.find((t) => t.id === edge.type);
       let w1: number, w2: number;
-      if (fixedWeight !== undefined) {
-        w1 = w2 = fixedWeight;
-      } else if (action.canvasW && action.canvasH) {
-        w1 = euclideanWeight(src, newNode, action.canvasW, action.canvasH);
-        w2 = euclideanWeight(newNode, tgt, action.canvasW, action.canvasH);
+      if (typeDef?.weightMode === 'fixed') {
+        w1 = w2 = typeDef.fixedWeight;
       } else {
-        // Proportional split by normalized distance (fallback)
-        const dSrc = Math.hypot(nx - src.nx, ny - src.ny);
-        const dTgt = Math.hypot(nx - tgt.nx, ny - tgt.ny);
-        const total = dSrc + dTgt || 1;
-        w1 = edge.weight * (dSrc / total);
-        w2 = edge.weight * (dTgt / total);
+        const splitSection = state.sections.find((s) => s.id === src.sectionId);
+        const sW = splitSection?.imageW ?? 1;
+        const sH = splitSection?.imageH ?? 1;
+        const splitScale = splitSection?.scale ?? 1.0;
+        const scalar = (typeDef?.lengthScalar ?? 1) * splitScale;
+        w1 = euclideanWeight(src, newNode, sW, sH) * scalar;
+        w2 = euclideanWeight(newNode, tgt, sW, sH) * scalar;
       }
 
       return {
@@ -196,8 +214,56 @@ function reducer(state: Building, action: Action): Building {
       };
     }
 
+    case 'ADD_EDGE_TYPE': {
+      const color = nextCustomColor(state.edgeTypes);
+      const newType: EdgeTypeDef = {
+        ...action.payload,
+        id: generateId(),
+        color,
+        dashPattern: [],
+        isBuiltIn: false,
+      };
+      return { ...state, edgeTypes: [...state.edgeTypes, newType] };
+    }
+
+    case 'DELETE_EDGE_TYPE': {
+      const { id } = action.payload;
+      const typeDef = state.edgeTypes.find((t) => t.id === id);
+      if (!typeDef || typeDef.isBuiltIn) return state;
+      return {
+        ...state,
+        edgeTypes: state.edgeTypes.filter((t) => t.id !== id),
+        edges: state.edges.map((e) => (e.type === id ? { ...e, type: 'walkway' } : e)),
+      };
+    }
+
+    case 'CALIBRATE_SECTION': {
+      const { sectionId, scale } = action.payload;
+      const section = state.sections.find((s) => s.id === sectionId);
+      if (!section) return state;
+      const W = section.imageW;
+      const H = section.imageH;
+      const sectionNodeIds = new Set(state.nodes.filter((n) => n.sectionId === sectionId).map((n) => n.id));
+      const nodeIndex = new Map(state.nodes.map((n) => [n.id, n]));
+      const typeIndex = new Map(state.edgeTypes.map((t) => [t.id, t]));
+      const updatedEdges = state.edges.map((e) => {
+        if (!sectionNodeIds.has(e.srcId) || !sectionNodeIds.has(e.tgtId) || e.crossSection) return e;
+        const typeDef = typeIndex.get(e.type);
+        if (!typeDef || typeDef.weightMode !== 'length') return e;
+        const src = nodeIndex.get(e.srcId);
+        const tgt = nodeIndex.get(e.tgtId);
+        if (!src || !tgt) return e;
+        return { ...e, weight: euclideanWeight(src, tgt, W, H) * typeDef.lengthScalar * scale };
+      });
+      return {
+        ...state,
+        sections: state.sections.map((s) => (s.id === sectionId ? { ...s, scale } : s)),
+        edges: updatedEdges,
+      };
+    }
+
     case 'LOAD_BUILDING': {
-      return action.payload;
+      return migrateBuilding(action.payload);
     }
 
     default:

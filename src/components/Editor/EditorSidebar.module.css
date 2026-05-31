@@ -275,6 +275,57 @@
   line-height: 1;
 }
 
+.etSwatch {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.etName {
+  flex: 1;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.etWeight {
+  font-size: 10px;
+  color: var(--text-ghost);
+  flex-shrink: 0;
+}
+
+.etInaccessible {
+  font-size: 9px;
+  color: #D85A30;
+  border: 1px solid #D85A30;
+  border-radius: 3px;
+  padding: 0 3px;
+  flex-shrink: 0;
+}
+
+.etRadioLabel {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.etCheckLabel {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+
+.etError {
+  font-size: 11px;
+  color: #D85A30;
+}
+
 @media (max-width: 1024px) {
   .sectionItem {
     padding: 11px 12px;

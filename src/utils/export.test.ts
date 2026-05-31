@@ -6,7 +6,7 @@ function makeFile(content: string): File {
   return new File([content], 'test.json', { type: 'application/json' });
 }
 
-const emptyBuilding: Building = { sections: [], nodes: [], edges: [] };
+const emptyBuilding: Building = { sections: [], nodes: [], edges: [], edgeTypes: [] };
 
 describe('importBuilding', () => {
   it('resolves with the building from a valid bundle', async () => {

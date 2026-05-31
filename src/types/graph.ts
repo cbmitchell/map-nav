@@ -1,9 +1,22 @@
-export type EdgeType = 'walkway' | 'stairs' | 'elevator' | 'ramp' | 'bridge';
+export type EdgeType = string;
+
+export interface EdgeTypeDef {
+  id: string;
+  name: string;
+  color: string;
+  dashPattern: number[];
+  weightMode: 'fixed' | 'length';
+  fixedWeight: number;
+  lengthScalar: number;
+  isAccessible: boolean;
+  isBuiltIn: boolean;
+}
 
 export interface Building {
   sections: Section[];
   nodes: Node[];
   edges: Edge[];
+  edgeTypes: EdgeTypeDef[];
 }
 
 export interface Section {
@@ -13,6 +26,7 @@ export interface Section {
   imageData: string;
   imageW: number;
   imageH: number;
+  scale?: number; // real-world units per image pixel; undefined = uncalibrated (treated as 1.0)
 }
 
 export interface Node {

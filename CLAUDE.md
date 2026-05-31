@@ -38,25 +38,33 @@ The app has two modes, toggled in the UI:
 src/
   components/
     Editor/
+      Editor.tsx             # editor shell component
       EditorCanvas.tsx       # canvas rendering + mouse interaction
       EditorToolbar.tsx      # mode/tool/edge-type controls
-      EditorSidebar.tsx      # section/floor management, cross-section connections
+      EditorSidebar.tsx      # section/floor management, cross-section connections, edge type management
     Navigator/
+      Navigator.tsx          # navigator shell, per-section zoom retention
       NavigatorCanvas.tsx    # read-only canvas with path highlight
-      NavigatorControls.tsx  # origin/destination dropdowns, directions toggle
+      NavigatorControls.tsx  # origin/destination dropdowns, category routing, directions toggle
       DirectionsPanel.tsx    # toggleable waypoint instruction list
     shared/
       AppShell.tsx           # top-level layout, mode toggle
+      ErrorBoundary.tsx      # error boundary wrapper
   hooks/
     useGraphReducer.ts       # useReducer for all graph state + localStorage sync
-    usePathfinder.ts         # Dijkstra implementation, accessibility filtering
+    usePathfinder.ts         # Dijkstra wrappers, accessibility filtering
     useCanvasRenderer.ts     # shared canvas draw logic (editor + navigator)
+    useMobile.ts             # mobile detection hook
+    useZoomPan.ts            # zoom/pan state hook
   types/
     graph.ts                 # all TypeScript interfaces (canonical source of truth)
+    editor.ts                # EditorMode, EditorState types
   utils/
     geometry.ts              # hit detection, euclidean distance, norm/px conversion
     export.ts                # serialize/deserialize graph bundle (base64-in-JSON)
     pathfinding.ts           # Dijkstra algorithm (pure function, no React)
+    pdf.ts                   # PDF import utility
+    id.ts                    # ID generation (generateId wrapping crypto.randomUUID)
 ```
 
 ---
@@ -67,12 +75,25 @@ These interfaces are the canonical source of truth. Do not deviate from them wit
 updating this file.
 
 ```ts
-type EdgeType = 'walkway' | 'stairs' | 'elevator' | 'ramp' | 'bridge';
+type EdgeType = string; // built-in IDs: 'walkway' | 'stairs' | 'elevator' | 'ramp'; custom types are user-defined strings
+
+interface EdgeTypeDef {
+  id: string;
+  name: string;
+  color: string;           // hex color for canvas rendering
+  dashPattern: number[];   // [] = solid; [12,6] = long dash; [4,4] = short dash
+  weightMode: 'fixed' | 'length';
+  fixedWeight: number;     // used when weightMode === 'fixed'
+  lengthScalar: number;    // multiplied by euclidean distance when weightMode === 'length'
+  isAccessible: boolean;   // false = excluded when "Accessible route" is enabled
+  isBuiltIn: boolean;      // true = cannot be deleted by the user
+}
 
 interface Building {
   sections: Section[];
   nodes: Node[];
   edges: Edge[];
+  edgeTypes: EdgeTypeDef[]; // built-in defaults + any user-created custom types
 }
 
 interface Section {
@@ -82,6 +103,7 @@ interface Section {
   imageData: string;    // base64-encoded image (PNG or JPG)
   imageW: number;       // natural image width in pixels
   imageH: number;       // natural image height in pixels
+  scale?: number;       // real-world units per image pixel; undefined = uncalibrated (treated as 1.0)
 }
 
 interface Node {
@@ -91,7 +113,8 @@ interface Node {
   ny: number;           // normalized y position (0.0–1.0) relative to section image
   label: string;        // display name, empty string if unlabeled
   isRoom: boolean;      // true = appears in navigator origin/destination dropdowns
-  isConnector: boolean; // true = stairwell landing, elevator door, bridge entry, etc.
+  isConnector: boolean; // true = stairwell landing, elevator door, etc.
+  category?: string;    // optional grouping for nearest-in-category routing
 }
 
 interface Edge {
@@ -99,22 +122,25 @@ interface Edge {
   srcId: string;
   tgtId: string;
   type: EdgeType;
-  weight: number;       // euclidean pixel distance for walkway/ramp; fixed constant for others
+  weight: number;        // computed at creation time; recalculated on node drag or type change
   crossSection: boolean; // true if src and tgt belong to different sections
 }
 ```
 
-### Fixed edge weights (constants, defined in `src/utils/pathfinding.ts`)
+### Default edge types (defined in `src/utils/pathfinding.ts`)
+
+The four built-in types are seeded into every new `Building` as `DEFAULT_EDGE_TYPES`. Users can add custom types alongside them via the sidebar.
 
 ```ts
-const FIXED_WEIGHTS: Partial<Record<EdgeType, number>> = {
-  stairs:   150,
-  elevator: 300,
-  bridge:   100,
-};
-// walkway and ramp weights are computed as euclidean pixel distance at creation time
-// and updated live when nodes are dragged
+// Built-in defaults (weightMode and fixedWeight shown for each)
+walkway:  { weightMode: 'length', lengthScalar: 1.0, isAccessible: true  }
+stairs:   { weightMode: 'fixed',  fixedWeight: 150,  isAccessible: false }
+elevator: { weightMode: 'fixed',  fixedWeight: 300,  isAccessible: true  }
+ramp:     { weightMode: 'length', lengthScalar: 1.0, isAccessible: true  }
 ```
+
+Edge weight for `length` types = `euclideanPixelDistance × lengthScalar × section.scale`.
+Edge weight for `fixed` types = `fixedWeight` (constant, not affected by position or scale).
 
 ### Coordinate system
 
@@ -131,13 +157,18 @@ All mutations to Building state go through the reducer. No direct state mutation
 
 Action types:
 - `ADD_SECTION` — add a new section (floor + image)
+- `UPDATE_SECTION` — rename a section or change its floor number
 - `UPDATE_SECTION_IMAGE` — set/replace the image for a section
 - `ADD_NODE` — place a node on a section
-- `UPDATE_NODE` — update label, isRoom, isConnector, or position
+- `UPDATE_NODE` — update label, isRoom, isConnector, category, or position (position change recalculates affected edge weights)
 - `DELETE_NODE` — remove node and all its edges
 - `ADD_EDGE` — connect two nodes
-- `UPDATE_EDGE` — change edge type (recalculates weight if changing to/from fixed type)
+- `UPDATE_EDGE` — change edge type or other fields (recalculates weight when type changes)
 - `DELETE_EDGE` — remove an edge
+- `SPLIT_EDGE` — insert a new unlabeled node at a point along an existing edge, replacing it with two edges
+- `ADD_EDGE_TYPE` — add a user-defined custom edge type
+- `DELETE_EDGE_TYPE` — remove a custom edge type (built-in types cannot be deleted); edges of that type are reassigned to `walkway`
+- `CALIBRATE_SECTION` — set `Section.scale` and recalculate all length-based edge weights for that section
 - `LOAD_BUILDING` — replace entire state (used for import)
 
 ### localStorage sync
@@ -176,6 +207,7 @@ Hit detection:
 | `node` | crosshair | click empty space to place node; clicking existing node does nothing |
 | `edge` | cell | click source node to begin edge; click target node to complete; click empty space to cancel |
 | `link` | crosshair | special mode for cross-section edges — see Cross-section connections below |
+| `calibrate` | crosshair | click two points on the map to define a known real-world distance; entering the distance sets `Section.scale` via `CALIBRATE_SECTION` |
 
 ### Cross-section connections (link mode)
 
@@ -197,9 +229,12 @@ They are listed in the EditorSidebar under "Cross-section connections."
 
 ### Room selection
 
-Origin and destination are selected from dropdown menus populated with all nodes where
-`isRoom === true`, grouped by section name. The user's current section view updates
-automatically to show the origin node's section when a selection is made.
+The navigator supports two destination modes:
+
+- **Room** — origin and destination are selected from dropdown menus populated with all nodes where `isRoom === true`, grouped by section name.
+- **Nearest in category** — destination is the closest node (by path weight) whose `category` matches the selected string. Uses `dijkstraToCategory()` in `src/utils/pathfinding.ts`.
+
+The user's current section view updates automatically to show the origin node's section when a selection is made.
 
 ### Pathfinding
 
@@ -255,17 +290,24 @@ app is insulated from this detail.
 
 ## Edge type reference
 
-| Type | Color | Dash pattern | Weight | Notes |
-|------|-------|--------------|--------|-------|
-| `walkway` | Blue `#378ADD` | Solid | Euclidean | Default type |
-| `stairs` | Coral `#D85A30` | Long dash | 150 (fixed) | Not accessible |
-| `elevator` | Purple `#534AB7` | Short dash | 300 (fixed) | Accessible |
-| `ramp` | Teal `#1D9E75` | Long dash | Euclidean | Accessible |
-| `bridge` | Amber `#EF9F27` | Dot-dash | 100 (fixed) | Cross-section |
+### Built-in types
 
-Accessibility filtering in the navigator excludes `stairs` by default when the
-"Accessible route" option is enabled. `elevator`, `ramp`, and `bridge` are always
-included in accessible routes.
+| Type | Color | Dash pattern | Weight | Accessible |
+|------|-------|--------------|--------|------------|
+| `walkway` | Blue `#378ADD` | Solid | Euclidean × scale | Yes |
+| `stairs` | Coral `#D85A30` | Long dash `[12,6]` | 150 (fixed) | No |
+| `elevator` | Purple `#534AB7` | Short dash `[4,4]` | 300 (fixed) | Yes |
+| `ramp` | Teal `#1D9E75` | Long dash `[12,6]` | Euclidean × scale | Yes |
+
+Accessibility filtering in the navigator excludes edge types where `isAccessible === false`
+(only `stairs` among the built-ins) when the "Accessible route" option is enabled.
+
+### Custom types
+
+Users can create additional edge types via the sidebar. Custom types are stored in
+`Building.edgeTypes` and can configure their own color, weight mode, fixed weight,
+length scalar, and accessibility flag. Custom types can be deleted; built-in types cannot.
+Deleting a custom type reassigns all its edges to `walkway`.
 
 ---
 
@@ -277,7 +319,7 @@ included in accessible routes.
 - Pure functions (pathfinding, geometry, export) live in `src/utils/` with no React imports.
 - Prefer explicit action types in the reducer over generic `UPDATE` actions with partial
   payloads — makes the action log readable when debugging.
-- All node IDs and edge IDs are generated with `crypto.randomUUID()`.
+- All node IDs and edge IDs are generated with `generateId()` from `src/utils/id.ts` (wraps `crypto.randomUUID()`).
 - Numbers displayed to the user are always rounded — no raw floats in the UI.
 
 ---

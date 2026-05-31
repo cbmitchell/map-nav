@@ -1,6 +1,5 @@
 import { useState, useLayoutEffect, useMemo, useCallback, useRef } from 'react';
 import clsx from 'clsx';
-import type { EdgeType } from '../../types/graph';
 import { useGraphReducer } from '../../hooks/useGraphReducer';
 import styles from './Navigator.module.css';
 import { usePathfinder } from '../../hooks/usePathfinder';
@@ -40,9 +39,11 @@ export function Navigator() {
     setView(zoomPerSection.current[newId] ?? DEFAULT_ZOOM_PAN);
   }, [setView]);
 
-  const excludedTypes = useMemo<Set<EdgeType>>(
-    () => (accessibleOnly ? new Set<EdgeType>(['stairs']) : new Set<EdgeType>()),
-    [accessibleOnly],
+  const excludedTypes = useMemo<Set<string>>(
+    () => accessibleOnly
+      ? new Set(state.edgeTypes.filter((t) => !t.isAccessible).map((t) => t.id))
+      : new Set<string>(),
+    [accessibleOnly, state.edgeTypes],
   );
 
   const { path, error } = usePathfinder(state, srcId, tgtId, tgtCategory, excludedTypes);

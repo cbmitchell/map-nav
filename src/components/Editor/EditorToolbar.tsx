@@ -42,7 +42,7 @@ export function EditorToolbar({
   const importInputRef = useRef<HTMLInputElement>(null);
 
   const setMode = (mode: EditorMode) => {
-    onEditorStateChange({ mode, pendingEdgeSrcId: null, selectedNodeId: null, selectedEdgeId: null });
+    onEditorStateChange({ mode, pendingEdgeSrcId: null, selectedNodeId: null, selectedEdgeId: null, calibrateA: null, calibrateB: null });
   };
 
   const handleUploadClick = () => fileInputRef.current?.click();
@@ -114,6 +114,7 @@ export function EditorToolbar({
           )],
           ['node', 'Add Node', '⊕'],
           ['edge', 'Add Edge', '↔'],
+          ['calibrate', 'Calibrate', '⌖'],
         ] as [EditorMode, string, ReactNode][]).map(([m, label, icon]) => (
           <button
             key={m}
@@ -125,6 +126,14 @@ export function EditorToolbar({
             <span className={styles.btnIcon}>{icon}</span>
           </button>
         ))}
+        {activeSection && (
+          <span
+            className={clsx(styles.calibratedBadge, activeSection.scale !== undefined && styles.calibratedBadgeActive)}
+            title={activeSection.scale !== undefined ? `Scale: ${activeSection.scale.toExponential(2)} units/px` : 'Section not calibrated'}
+          >
+            {activeSection.scale !== undefined ? '✓ calibrated' : 'uncalibrated'}
+          </span>
+        )}
       </div>
 
       <div className={styles.divider} />

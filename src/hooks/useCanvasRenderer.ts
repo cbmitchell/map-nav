@@ -1,38 +1,22 @@
 import { useCallback, useLayoutEffect, useRef, useEffect } from 'react';
 import type { RefObject } from 'react';
-import type { Building, EdgeType } from '../types/graph';
+import type { Building, EdgeTypeDef } from '../types/graph';
 import type { EditorState } from '../types/editor';
 import { DEFAULT_EDITOR_STATE } from '../types/editor';
 import type { ZoomPanState } from './useZoomPan';
 import { DEFAULT_ZOOM_PAN } from './useZoomPan';
 
 // ---------------------------------------------------------------------------
-// Edge display constants
+// Edge display helpers (derived from building.edgeTypes at render time)
 // ---------------------------------------------------------------------------
 
-export const EDGE_COLORS: Record<EdgeType, string> = {
-  walkway: '#378ADD',
-  stairs: '#D85A30',
-  elevator: '#534AB7',
-  ramp: '#1D9E75',
-  bridge: '#EF9F27',
-};
-
-export const EDGE_DASHES: Record<EdgeType, number[]> = {
-  walkway: [],
-  stairs: [12, 6],
-  elevator: [4, 4],
-  ramp: [12, 6],
-  bridge: [8, 4, 2, 4],
-};
-
-export const EDGE_LABELS: Record<EdgeType, string> = {
-  walkway: 'Walkway',
-  stairs: 'Stairs',
-  elevator: 'Elevator',
-  ramp: 'Ramp',
-  bridge: 'Bridge',
-};
+export function buildEdgeLookups(edgeTypes: EdgeTypeDef[]) {
+  return {
+    colors: Object.fromEntries(edgeTypes.map((t) => [t.id, t.color])) as Record<string, string>,
+    dashes: Object.fromEntries(edgeTypes.map((t) => [t.id, t.dashPattern])) as Record<string, number[]>,
+    labels: Object.fromEntries(edgeTypes.map((t) => [t.id, t.name])) as Record<string, string>,
+  };
+}
 
 const PATH_COLOR = '#EF9F27';
 const DIM_ALPHA = 0.15;
@@ -163,6 +147,8 @@ export function useCanvasRenderer(
       }
     }
 
+    const edgeLookups = buildEdgeLookups(building.edgeTypes);
+
     // 3. Edges
     // When in path mode: draw non-path edges first (dimmed), then path edges on top
     const drawEdge = (edge: typeof sectionEdges[number], isPath: boolean) => {
@@ -182,9 +168,9 @@ export function useCanvasRenderer(
         ctx.lineWidth = 3;
         ctx.setLineDash([]);
       } else {
-        ctx.strokeStyle = isSelected ? '#ffffff' : EDGE_COLORS[edge.type];
+        ctx.strokeStyle = isSelected ? '#ffffff' : (edgeLookups.colors[edge.type] ?? '#888');
         ctx.lineWidth = isSelected ? 3 : 2;
-        ctx.setLineDash(EDGE_DASHES[edge.type]);
+        ctx.setLineDash(edgeLookups.dashes[edge.type] ?? []);
       }
       ctx.stroke();
       ctx.setLineDash([]);
@@ -229,7 +215,7 @@ export function useCanvasRenderer(
         ctx.beginPath();
         ctx.moveTo(src.x, src.y);
         ctx.lineTo(mouse.x, mouse.y);
-        ctx.strokeStyle = EDGE_COLORS[es.currentEdgeType];
+        ctx.strokeStyle = edgeLookups.colors[es.currentEdgeType] ?? '#888';
         ctx.lineWidth = 2;
         ctx.setLineDash([5, 5]);
         ctx.globalAlpha = 0.7;
@@ -237,6 +223,55 @@ export function useCanvasRenderer(
         ctx.setLineDash([]);
         ctx.globalAlpha = 1;
       }
+    }
+
+    // 4b. Calibration overlay (calibrate mode)
+    if (es.mode === 'calibrate' && es.calibrateA) {
+      const aScreen = toScreen(es.calibrateA.nx * W, es.calibrateA.ny * contentH);
+
+      if (es.calibrateB) {
+        // Both points set — draw solid line between them
+        const bScreen = toScreen(es.calibrateB.nx * W, es.calibrateB.ny * contentH);
+        ctx.beginPath();
+        ctx.moveTo(aScreen.x, aScreen.y);
+        ctx.lineTo(bScreen.x, bScreen.y);
+        ctx.strokeStyle = '#F97316';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 0.9;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        // Draw point B
+        ctx.beginPath();
+        ctx.arc(bScreen.x, bScreen.y, 8, 0, Math.PI * 2);
+        ctx.fillStyle = '#F97316';
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      } else if (es.mousePos) {
+        // Rubber-band line to cursor
+        const mScreen = toScreen(es.mousePos.x, es.mousePos.y);
+        ctx.beginPath();
+        ctx.moveTo(aScreen.x, aScreen.y);
+        ctx.lineTo(mScreen.x, mScreen.y);
+        ctx.strokeStyle = '#F97316';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.globalAlpha = 0.75;
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+      }
+
+      // Draw point A
+      ctx.beginPath();
+      ctx.arc(aScreen.x, aScreen.y, 8, 0, Math.PI * 2);
+      ctx.fillStyle = '#F97316';
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
     }
 
     // 5. Nodes

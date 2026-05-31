@@ -87,6 +87,20 @@
   text-overflow: ellipsis;
 }
 
+.calibratedBadge {
+  font-size: 11px;
+  color: var(--text-faint);
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--border-default);
+  white-space: nowrap;
+}
+
+.calibratedBadgeActive {
+  color: #1D9E75;
+  border-color: #1D9E75;
+}
+
 .linkBanner {
   display: flex;
   align-items: center;
@@ -162,5 +176,9 @@
   .linkBanner {
     margin-left: 0;
     width: 100%;
+  }
+
+  .calibratedBadge {
+    display: none;
   }
 }

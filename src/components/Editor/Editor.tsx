@@ -6,12 +6,9 @@ import styles from './Editor.module.css';
 import type { ZoomPanState } from '../../hooks/useZoomPan';
 import { DEFAULT_EDITOR_STATE } from '../../types/editor';
 import type { EditorState, EditorMode } from '../../types/editor';
-import type { EdgeType } from '../../types/graph';
 import { EditorToolbar } from './EditorToolbar';
 import { EditorCanvas } from './EditorCanvas';
 import { EditorSidebar } from './EditorSidebar';
-
-const EDGE_TYPE_KEYS: EdgeType[] = ['walkway', 'stairs', 'elevator', 'ramp', 'bridge'];
 
 export function Editor() {
   const { state, dispatch, undo } = useGraphReducer();
@@ -30,6 +27,7 @@ export function Editor() {
   const editorStateRef = useRef(editorState);
   const dispatchRef = useRef(dispatch);
   const undoRef = useRef(undo);
+  const edgeTypesRef = useRef(state.edgeTypes);
   const canvasSizeRef = useRef({ w: 0, h: 0 });
 
   useLayoutEffect(() => {
@@ -37,6 +35,7 @@ export function Editor() {
     editorStateRef.current = editorState;
     dispatchRef.current = dispatch;
     undoRef.current = undo;
+    edgeTypesRef.current = state.edgeTypes;
   });
 
   // Keyboard shortcuts
@@ -90,16 +89,25 @@ export function Editor() {
         return;
       }
 
-      // 1–5 — switch edge type
+      // 1–N — switch edge type
       const idx = parseInt(e.key) - 1;
-      if (!isNaN(idx) && idx >= 0 && idx < EDGE_TYPE_KEYS.length && !e.ctrlKey && !e.metaKey) {
-        setEditorState((prev) => ({ ...prev, currentEdgeType: EDGE_TYPE_KEYS[idx] }));
+      const edgeTypes = edgeTypesRef.current;
+      if (!isNaN(idx) && idx >= 0 && idx < edgeTypes.length && !e.ctrlKey && !e.metaKey) {
+        setEditorState((prev) => ({ ...prev, currentEdgeType: edgeTypes[idx].id }));
       }
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []); // empty — all mutable values accessed via refs or stable setters
+
+  // Reset currentEdgeType to 'walkway' if the active type was deleted
+  useEffect(() => {
+    const typeIds = state.edgeTypes.map((t) => t.id);
+    if (!typeIds.includes(editorState.currentEdgeType)) {
+      setEditorState((prev) => ({ ...prev, currentEdgeType: 'walkway' }));
+    }
+  }, [state.edgeTypes, editorState.currentEdgeType]);
 
   const handleSectionChange = useCallback(
     (newId: string) => {
@@ -197,7 +205,7 @@ export function Editor() {
                 <li>Switch to <strong>Navigator</strong> mode to find paths between rooms</li>
               </ol>
               <p className={styles.onboardingHint}>
-                Keyboard shortcuts: <kbd>S</kbd> Select · <kbd>N</kbd> Node · <kbd>E</kbd> Edge · <kbd>Del</kbd> Delete · <kbd>Esc</kbd> Cancel · <kbd>1</kbd>–<kbd>5</kbd> Edge type · <kbd>Ctrl+Z</kbd> Undo
+                Keyboard shortcuts: <kbd>S</kbd> Select · <kbd>N</kbd> Node · <kbd>E</kbd> Edge · <kbd>Del</kbd> Delete · <kbd>Esc</kbd> Cancel · <kbd>1</kbd>–<kbd>N</kbd> Edge type · <kbd>Ctrl+Z</kbd> Undo
               </p>
             </div>
           ) : (
