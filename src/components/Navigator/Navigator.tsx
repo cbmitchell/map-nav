@@ -18,7 +18,8 @@ export function Navigator() {
   const [excludedTypes, setExcludedTypes] = useState<Set<string>>(new Set());
   const [showDirections, setShowDirections] = useState(false);
   const [pickMode, setPickMode] = useState<PickMode>(null);
-  const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
+  const [preferredSectionId, setPreferredSectionId] = useState<string | null>(null);
+  const activeSectionId = preferredSectionId ?? state.sections[0]?.id ?? null;
   const { zoomPan, handleWheel, pan, zoomAt, setView } = useZoomPan();
 
   // Per-section zoom for navigator (same pattern as editor)
@@ -37,7 +38,7 @@ export function Navigator() {
     if (activeSectionIdRef.current) {
       zoomPerSection.current[activeSectionIdRef.current] = zoomPanRef.current;
     }
-    setActiveSectionId(newId);
+    setPreferredSectionId(newId);
     setView(zoomPerSection.current[newId] ?? DEFAULT_ZOOM_PAN);
   }, [setView]);
 
@@ -140,6 +141,8 @@ export function Navigator() {
           onSrcChange={handleSrcChange}
           onTgtChange={handleTgtChange}
           onTgtCategoryChange={handleTgtCategoryChange}
+          activeSectionId={activeSectionId}
+          onSectionChange={switchSection}
           onExcludedTypesChange={setExcludedTypes}
           onDirectionsToggle={setShowDirections}
           onPickModeChange={setPickMode}

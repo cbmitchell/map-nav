@@ -164,6 +164,52 @@
   border: 1px solid rgba(216, 90, 48, 0.3);
 }
 
+.sectionList {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sectionItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px 6px 12px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-dim);
+  border-left: 2px solid transparent;
+  user-select: none;
+}
+
+.sectionItem:hover {
+  background: var(--bg-card);
+  color: #ccc;
+}
+
+.sectionItemActive {
+  background: var(--bg-raised);
+  color: #eee;
+  border-left-color: var(--accent-blue);
+  padding-left: 10px;
+}
+
+.sectionName {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.sectionFloor {
+  font-size: 11px;
+  color: var(--text-ghost);
+  flex-shrink: 0;
+  margin-left: 6px;
+}
+
 @media (max-width: 1024px) {
   .controls {
     width: 240px;

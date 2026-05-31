@@ -18,12 +18,14 @@ interface NavigatorControlsProps {
   error: string | null;
   resolvedTgtLabel: string | null;
   pickMode: PickMode;
+  activeSectionId: string | null;
   onSrcChange: (id: string | null) => void;
   onTgtChange: (id: string | null) => void;
   onTgtCategoryChange: (category: string | null) => void;
   onExcludedTypesChange: (types: Set<string>) => void;
   onDirectionsToggle: (v: boolean) => void;
   onPickModeChange: (mode: PickMode) => void;
+  onSectionChange: (id: string) => void;
 }
 
 export function NavigatorControls({
@@ -37,12 +39,14 @@ export function NavigatorControls({
   error,
   resolvedTgtLabel,
   pickMode,
+  activeSectionId,
   onSrcChange,
   onTgtChange,
   onTgtCategoryChange,
   onExcludedTypesChange,
   onDirectionsToggle,
   onPickModeChange,
+  onSectionChange,
 }: NavigatorControlsProps) {
   const [destMode, setDestMode] = useState<'room' | 'category'>('room');
   const { isMobile } = useMobile();
@@ -232,8 +236,32 @@ export function NavigatorControls({
 
       {error && <div className={styles.error}>{error}</div>}
 
+      {building.sections.length > 0 && (
+        <>
+          <div className={styles.divider} />
+          <div className={styles.section}>
+            <div className={styles.sectionLabel}>Sections</div>
+            <div className={styles.sectionList}>
+              {building.sections.map((s) => (
+                <div
+                  key={s.id}
+                  className={clsx(styles.sectionItem, s.id === activeSectionId && styles.sectionItemActive)}
+                  onClick={() => onSectionChange(s.id)}
+                >
+                  <span className={styles.sectionName}>{s.name}</span>
+                  <span className={styles.sectionFloor}>F{s.floor}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
       {showDirections && path && path.length > 0 && (
-        <DirectionsPanel building={building} path={path} />
+        <>
+          <div className={styles.divider} />
+          <DirectionsPanel building={building} path={path} />
+        </>
       )}
     </div>
   );
