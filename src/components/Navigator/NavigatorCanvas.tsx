@@ -58,6 +58,7 @@ export function NavigatorCanvas({
     undefined,
     zoomPan,
     path,
+    path === null,
   );
 
   // Canvas sizing

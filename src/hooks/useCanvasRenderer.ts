@@ -32,12 +32,14 @@ export function useCanvasRenderer(
   editorState: EditorState = DEFAULT_EDITOR_STATE,
   zoomPan: ZoomPanState = DEFAULT_ZOOM_PAN,
   highlightPath: string[] | null = null,
+  roomsOnly = false,
 ) {
   const buildingRef = useRef(building);
   const activeSectionIdRef = useRef(activeSectionId);
   const editorStateRef = useRef(editorState);
   const zoomPanRef = useRef(zoomPan);
   const highlightPathRef = useRef(highlightPath);
+  const roomsOnlyRef = useRef(roomsOnly);
   const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
   const redrawRef = useRef<() => void>(() => {});
 
@@ -47,6 +49,7 @@ export function useCanvasRenderer(
     editorStateRef.current = editorState;
     zoomPanRef.current = zoomPan;
     highlightPathRef.current = highlightPath;
+    roomsOnlyRef.current = roomsOnly;
   });
 
   const redraw = useCallback(() => {
@@ -62,6 +65,7 @@ export function useCanvasRenderer(
     const es = editorStateRef.current;
     const { scale, panX, panY } = zoomPanRef.current;
     const path = highlightPathRef.current;
+    const roomsOnly = roomsOnlyRef.current;
 
     // On mobile the canvas may be taller than the image aspect ratio (fills the screen).
     // Content coordinates are always bounded by the image's natural aspect ratio.
@@ -150,7 +154,6 @@ export function useCanvasRenderer(
     const edgeLookups = buildEdgeLookups(building.edgeTypes);
 
     // 3. Edges
-    // When in path mode: draw non-path edges first (dimmed), then path edges on top
     const drawEdge = (edge: typeof sectionEdges[number], isPath: boolean) => {
       const src = nodeIndex.get(edge.srcId);
       const tgt = nodeIndex.get(edge.tgtId);
@@ -202,7 +205,7 @@ export function useCanvasRenderer(
         const onPath = pathEdgePairs.has(`${edge.srcId}|${edge.tgtId}`);
         if (onPath) drawEdge(edge, true);
       }
-    } else {
+    } else if (!roomsOnly) {
       for (const edge of sectionEdges) drawEdge(edge, false);
     }
 
@@ -337,7 +340,9 @@ export function useCanvasRenderer(
         if (pathNodeSet!.has(node.id) && isSignificantNode(node)) drawNode(node, true);
       }
     } else {
-      for (const node of sectionNodes) drawNode(node, false);
+      for (const node of sectionNodes) {
+        if (!roomsOnly || node.isRoom) drawNode(node, false);
+      }
     }
 
     // Reset transform
@@ -348,7 +353,7 @@ export function useCanvasRenderer(
 
   useEffect(() => {
     redraw();
-  }, [redraw, building, activeSectionId, editorState, zoomPan, highlightPath]);
+  }, [redraw, building, activeSectionId, editorState, zoomPan, highlightPath, roomsOnly]);
 
   return { redraw };
 }
