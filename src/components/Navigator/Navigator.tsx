@@ -7,15 +7,17 @@ import { useZoomPan, DEFAULT_ZOOM_PAN } from '../../hooks/useZoomPan';
 import type { ZoomPanState } from '../../hooks/useZoomPan';
 import { NavigatorControls } from './NavigatorControls';
 import { NavigatorCanvas } from './NavigatorCanvas';
-import { DirectionsPanel } from './DirectionsPanel';
+
+type PickMode = 'src' | 'tgt' | null;
 
 export function Navigator() {
   const { state } = useGraphReducer();
   const [srcId, setSrcId] = useState<string | null>(null);
   const [tgtId, setTgtId] = useState<string | null>(null);
   const [tgtCategory, setTgtCategory] = useState<string | null>(null);
-  const [accessibleOnly, setAccessibleOnly] = useState(false);
+  const [excludedTypes, setExcludedTypes] = useState<Set<string>>(new Set());
   const [showDirections, setShowDirections] = useState(false);
+  const [pickMode, setPickMode] = useState<PickMode>(null);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const { zoomPan, handleWheel, pan, zoomAt, setView } = useZoomPan();
 
@@ -39,13 +41,6 @@ export function Navigator() {
     setView(zoomPerSection.current[newId] ?? DEFAULT_ZOOM_PAN);
   }, [setView]);
 
-  const excludedTypes = useMemo<Set<string>>(
-    () => accessibleOnly
-      ? new Set(state.edgeTypes.filter((t) => !t.isAccessible).map((t) => t.id))
-      : new Set<string>(),
-    [accessibleOnly, state.edgeTypes],
-  );
-
   const { path, error } = usePathfinder(state, srcId, tgtId, tgtCategory, excludedTypes);
 
   // Wrap setSrcId so that picking a new origin also switches the canvas to that section
@@ -66,6 +61,12 @@ export function Navigator() {
     setTgtCategory(cat);
     setTgtId(null);
   }, []);
+
+  const handleNodePick = useCallback((nodeId: string) => {
+    if (pickMode === 'src') handleSrcChange(nodeId);
+    else if (pickMode === 'tgt') handleTgtChange(nodeId);
+    setPickMode(null);
+  }, [pickMode, handleSrcChange, handleTgtChange]);
 
   // When routing by category, resolve the destination room name from the path's last node
   const resolvedTgtLabel = useMemo(() => {
@@ -97,23 +98,7 @@ export function Navigator() {
 
   return (
     <div className={styles.navigator}>
-      <NavigatorControls
-        building={state}
-        srcId={srcId}
-        tgtId={tgtId}
-        tgtCategory={tgtCategory}
-        accessibleOnly={accessibleOnly}
-        showDirections={showDirections}
-        error={error}
-        resolvedTgtLabel={resolvedTgtLabel}
-        onSrcChange={handleSrcChange}
-        onTgtChange={handleTgtChange}
-        onTgtCategoryChange={handleTgtCategoryChange}
-        onAccessibleToggle={setAccessibleOnly}
-        onDirectionsToggle={setShowDirections}
-      />
-
-      {/* Multi-section step indicator */}
+      {/* Multi-section step indicator spans full width above body */}
       {pathSections.length > 1 && (
         <div className={styles.stepBar}>
           <button
@@ -140,21 +125,41 @@ export function Navigator() {
         </div>
       )}
 
-      <div className={styles.canvasArea}>
-        <NavigatorCanvas
+      <div className={styles.body}>
+        <NavigatorControls
           building={state}
-          activeSectionId={activeSectionId}
+          srcId={srcId}
+          tgtId={tgtId}
+          tgtCategory={tgtCategory}
+          excludedTypes={excludedTypes}
+          showDirections={showDirections}
           path={path}
-          zoomPan={zoomPan}
-          onWheel={handleWheel}
-          onPan={pan}
-          onZoomAt={zoomAt}
+          error={error}
+          resolvedTgtLabel={resolvedTgtLabel}
+          pickMode={pickMode}
+          onSrcChange={handleSrcChange}
+          onTgtChange={handleTgtChange}
+          onTgtCategoryChange={handleTgtCategoryChange}
+          onExcludedTypesChange={setExcludedTypes}
+          onDirectionsToggle={setShowDirections}
+          onPickModeChange={setPickMode}
         />
-      </div>
 
-      {showDirections && path && path.length > 0 && (
-        <DirectionsPanel building={state} path={path} />
-      )}
+        <div className={styles.canvasArea}>
+          <NavigatorCanvas
+            building={state}
+            activeSectionId={activeSectionId}
+            path={path}
+            zoomPan={zoomPan}
+            onWheel={handleWheel}
+            onPan={pan}
+            onZoomAt={zoomAt}
+            pickMode={pickMode}
+            onNodePick={handleNodePick}
+            onPickCancel={() => setPickMode(null)}
+          />
+        </div>
+      </div>
     </div>
   );
 }

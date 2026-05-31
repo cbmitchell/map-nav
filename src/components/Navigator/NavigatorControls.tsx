@@ -2,22 +2,28 @@ import { useState } from 'react';
 import clsx from 'clsx';
 import type { Building } from '../../types/graph';
 import { useMobile } from '../../hooks/useMobile';
+import { DirectionsPanel } from './DirectionsPanel';
 import styles from './NavigatorControls.module.css';
+
+type PickMode = 'src' | 'tgt' | null;
 
 interface NavigatorControlsProps {
   building: Building;
   srcId: string | null;
   tgtId: string | null;
   tgtCategory: string | null;
-  accessibleOnly: boolean;
+  excludedTypes: Set<string>;
   showDirections: boolean;
+  path: string[] | null;
   error: string | null;
   resolvedTgtLabel: string | null;
+  pickMode: PickMode;
   onSrcChange: (id: string | null) => void;
   onTgtChange: (id: string | null) => void;
   onTgtCategoryChange: (category: string | null) => void;
-  onAccessibleToggle: (v: boolean) => void;
+  onExcludedTypesChange: (types: Set<string>) => void;
   onDirectionsToggle: (v: boolean) => void;
+  onPickModeChange: (mode: PickMode) => void;
 }
 
 export function NavigatorControls({
@@ -25,15 +31,18 @@ export function NavigatorControls({
   srcId,
   tgtId,
   tgtCategory,
-  accessibleOnly,
+  excludedTypes,
   showDirections,
+  path,
   error,
   resolvedTgtLabel,
+  pickMode,
   onSrcChange,
   onTgtChange,
   onTgtCategoryChange,
-  onAccessibleToggle,
+  onExcludedTypesChange,
   onDirectionsToggle,
+  onPickModeChange,
 }: NavigatorControlsProps) {
   const [destMode, setDestMode] = useState<'room' | 'category'>('room');
   const { isMobile } = useMobile();
@@ -80,10 +89,30 @@ export function NavigatorControls({
     }
   };
 
+  const toggleExcludedType = (typeId: string, included: boolean) => {
+    const next = new Set(excludedTypes);
+    if (included) {
+      next.delete(typeId);
+    } else {
+      next.add(typeId);
+    }
+    onExcludedTypesChange(next);
+  };
+
   return (
     <div className={styles.controls}>
-      <div className={styles.row}>
-        <label className={styles.label}>From</label>
+      {/* From */}
+      <div className={styles.fieldBlock}>
+        <div className={styles.row}>
+          <label className={styles.label}>From</label>
+          <button
+            className={clsx(styles.pickBtn, pickMode === 'src' && styles.pickBtnActive)}
+            onClick={() => onPickModeChange(pickMode === 'src' ? null : 'src')}
+            title="Pick origin from map"
+          >
+            {pickMode === 'src' ? 'Picking…' : 'Pick'}
+          </button>
+        </div>
         <select
           className={styles.select}
           value={srcId ?? ''}
@@ -95,7 +124,8 @@ export function NavigatorControls({
         </select>
       </div>
 
-      <div className={styles.toBlock}>
+      {/* To */}
+      <div className={styles.fieldBlock}>
         <div className={styles.row}>
           <label className={styles.label}>To</label>
           <div className={styles.modeToggle}>
@@ -113,11 +143,20 @@ export function NavigatorControls({
               {isMobile ? 'Nearest' : 'Nearest in category'}
             </button>
           </div>
+          {destMode === 'room' && (
+            <button
+              className={clsx(styles.pickBtn, pickMode === 'tgt' && styles.pickBtnActive)}
+              onClick={() => onPickModeChange(pickMode === 'tgt' ? null : 'tgt')}
+              title="Pick destination from map"
+            >
+              {pickMode === 'tgt' ? 'Picking…' : 'Pick'}
+            </button>
+          )}
         </div>
 
         {destMode === 'room' ? (
           <select
-            className={clsx(styles.select, styles.selectIndented)}
+            className={styles.select}
             value={tgtId ?? ''}
             disabled={noRooms}
             onChange={(e) => onTgtChange(e.target.value || null)}
@@ -128,7 +167,7 @@ export function NavigatorControls({
         ) : (
           <>
             <select
-              className={clsx(styles.select, styles.selectIndented)}
+              className={styles.select}
               value={tgtCategory ?? ''}
               disabled={knownCategories.length === 0}
               onChange={(e) => onTgtCategoryChange(e.target.value || null)}
@@ -154,15 +193,28 @@ export function NavigatorControls({
 
       <div className={styles.divider} />
 
-      <label className={styles.toggle}>
-        <input
-          type="checkbox"
-          checked={accessibleOnly}
-          onChange={(e) => onAccessibleToggle(e.target.checked)}
-        />
-        <span>Accessible route (no stairs)</span>
-      </label>
+      {/* Edge type exclusion */}
+      <div className={styles.section}>
+        <div className={styles.sectionLabel}>Route options</div>
+        {building.edgeTypes.map((et) => {
+          const included = !excludedTypes.has(et.id);
+          return (
+            <label key={et.id} className={styles.typeRow}>
+              <input
+                type="checkbox"
+                checked={included}
+                onChange={(e) => toggleExcludedType(et.id, e.target.checked)}
+              />
+              <span className={styles.typeSwatch} style={{ background: et.color }} />
+              <span className={styles.typeName}>{et.name}</span>
+            </label>
+          );
+        })}
+      </div>
 
+      <div className={styles.divider} />
+
+      {/* Show directions toggle */}
       <label className={styles.toggle}>
         <input
           type="checkbox"
@@ -179,7 +231,10 @@ export function NavigatorControls({
       )}
 
       {error && <div className={styles.error}>{error}</div>}
+
+      {showDirections && path && path.length > 0 && (
+        <DirectionsPanel building={building} path={path} />
+      )}
     </div>
   );
 }
-

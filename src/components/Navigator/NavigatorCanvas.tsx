@@ -5,6 +5,10 @@ import { useCanvasRenderer } from '../../hooks/useCanvasRenderer';
 import { useMobile } from '../../hooks/useMobile';
 import styles from './NavigatorCanvas.module.css';
 
+const HIT_RADIUS = 12;
+
+type PickMode = 'src' | 'tgt' | null;
+
 interface NavigatorCanvasProps {
   building: Building;
   activeSectionId: string | null;
@@ -13,6 +17,9 @@ interface NavigatorCanvasProps {
   onWheel: (e: WheelEvent, rect: DOMRect) => void;
   onPan: (dx: number, dy: number) => void;
   onZoomAt: (screenX: number, screenY: number, newScale: number) => void;
+  pickMode: PickMode;
+  onNodePick: (nodeId: string) => void;
+  onPickCancel: () => void;
 }
 
 export function NavigatorCanvas({
@@ -23,6 +30,9 @@ export function NavigatorCanvas({
   onWheel,
   onPan,
   onZoomAt,
+  pickMode,
+  onNodePick,
+  onPickCancel,
 }: NavigatorCanvasProps) {
   const { isMobile, isTablet } = useMobile();
   const isSmall = isMobile || isTablet;
@@ -90,9 +100,13 @@ export function NavigatorCanvas({
     return () => canvas.removeEventListener('wheel', handler);
   }, [onWheel]);
 
-  // Space key pan mode
+  // Space key pan mode + Escape to cancel pick mode
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Escape') {
+        onPickCancel();
+        return;
+      }
       if (e.code === 'Space' && !(e.target instanceof HTMLInputElement)) {
         // Always suppress Space default on non-input elements — prevents a focused
         // <select> from toggling open on repeated keydown events while panning
@@ -116,11 +130,49 @@ export function NavigatorCanvas({
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, []);
+  }, [onPickCancel]);
 
   // ---------------------------------------------------------------------------
   // Mouse interaction (pan only)
   // ---------------------------------------------------------------------------
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (!pickMode) return;
+    const canvas = canvasRef.current!;
+    const rect = canvas.getBoundingClientRect();
+    const sx = e.clientX - rect.left;
+    const sy = e.clientY - rect.top;
+    const section = buildingRef.current.sections.find(
+      (s) => s.id === activeSectionIdRef.current,
+    );
+    if (!section) { onPickCancel(); return; }
+
+    // Hit-test room nodes on the active section in screen space
+    const sectionNodes = buildingRef.current.nodes.filter(
+      (n) => n.sectionId === activeSectionIdRef.current && n.isRoom,
+    );
+
+    let hit: string | null = null;
+    let bestDist = Infinity;
+    for (const node of sectionNodes) {
+      // node normalized coords → canvas pixel coords → screen coords
+      const nodeCanvasX = node.nx * canvas.width;
+      const nodeCanvasY = node.ny * canvas.height;
+      const nodeScreenX = nodeCanvasX * zoomPanRef.current.scale + zoomPanRef.current.panX;
+      const nodeScreenY = nodeCanvasY * zoomPanRef.current.scale + zoomPanRef.current.panY;
+      const dist = Math.hypot(sx - nodeScreenX, sy - nodeScreenY);
+      if (dist < HIT_RADIUS && dist < bestDist) {
+        bestDist = dist;
+        hit = node.id;
+      }
+    }
+
+    if (hit) {
+      onNodePick(hit);
+    } else {
+      onPickCancel();
+    }
+  };
 
   const handleMouseDown = (e: React.MouseEvent) => {
     const canvas = canvasRef.current!;
@@ -226,7 +278,8 @@ export function NavigatorCanvas({
       )}
       <canvas
         ref={canvasRef}
-        style={{ display: 'block', touchAction: 'none' }}
+        style={{ display: 'block', touchAction: 'none', cursor: pickMode ? 'crosshair' : undefined }}
+        onClick={handleClick}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
