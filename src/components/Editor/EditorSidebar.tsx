@@ -6,6 +6,7 @@ import type { Action } from '../../hooks/useGraphReducer';
 import type { EdgeTypeDef } from '../../types/graph';
 import { loadPdf, renderPdfPage } from '../../utils/pdf';
 import { generateId } from '../../utils/id';
+import { CollapsibleSection } from '../shared/CollapsibleSection';
 import styles from './EditorSidebar.module.css';
 
 interface EditorSidebarProps {
@@ -290,212 +291,214 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
         <div className={clsx(styles.closeRow, isMobileOrTablet && styles.closeRowVisible)}>
           <button className={styles.closeBtn} onClick={onClose}>✕</button>
         </div>
-      <div className={styles.sectionHeader}>Sections</div>
+      <CollapsibleSection title="Sections" storageKey="editor-sections">
+        <div className={styles.sectionList}>
+          {building.sections.map((s) => (
+            <div key={s.id}>
+              <div
+                className={clsx(styles.sectionItem, s.id === activeSectionId && styles.sectionItemActive)}
+                onClick={() => { if (editingSectionId !== s.id) { onSectionChange(s.id); if (isMobileOrTablet) onClose(); } }}
+              >
+                <span className={styles.sectionName}>{s.name}</span>
+                <span className={styles.sectionFloor}>F{s.floor}</span>
+                {editingSectionId !== s.id && (
+                  <button
+                    className={styles.renameBtn}
+                    title="Edit section"
+                    onClick={(e) => { e.stopPropagation(); startEdit(s.id, s.name, s.floor); }}
+                  >
+                    ✎
+                  </button>
+                )}
+              </div>
+              {editingSectionId === s.id && (
+                <div className={styles.editForm}>
+                  <SectionForm
+                    name={editForm.name}
+                    floor={editForm.floor}
+                    file={editForm.file}
+                    onNameChange={(v) => setEditForm((p) => ({ ...p, name: v }))}
+                    onFloorChange={(v) => setEditForm((p) => ({ ...p, floor: v }))}
+                    onFileChange={(f) => setEditForm((p) => ({ ...p, file: f }))}
+                    onSubmit={commitEdit}
+                    onCancel={() => setEditingSectionId(null)}
+                    submitLabel="Save"
+                    submitting={editImporting}
+                    submitDisabled={editImporting}
+                    filePlaceholder="Replace image…"
+                    fileAccept="image/*"
+                    autoFocus
+                  />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
 
-      <div className={styles.sectionList}>
-        {building.sections.map((s) => (
-          <div key={s.id}>
-            <div
-              className={clsx(styles.sectionItem, s.id === activeSectionId && styles.sectionItemActive)}
-              onClick={() => { if (editingSectionId !== s.id) { onSectionChange(s.id); if (isMobileOrTablet) onClose(); } }}
-            >
-              <span className={styles.sectionName}>{s.name}</span>
-              <span className={styles.sectionFloor}>F{s.floor}</span>
-              {editingSectionId !== s.id && (
+        {showForm ? (
+          <div className={styles.form}>
+            <SectionForm
+              name={form.name}
+              floor={form.floor}
+              file={form.file}
+              onNameChange={(v) => setForm((p) => ({ ...p, name: v }))}
+              onFloorChange={(v) => setForm((p) => ({ ...p, floor: v }))}
+              onFileChange={(f) => setForm((p) => ({ ...p, file: f }))}
+              onSubmit={handleSubmit}
+              onCancel={() => setShowForm(false)}
+              submitLabel="Add"
+              submitting={importing}
+              submitDisabled={!form.file || importing}
+              filePlaceholder="Choose image or PDF…"
+              fileAccept="image/*,application/pdf"
+              autoFocus
+            />
+          </div>
+        ) : (
+          <button className={styles.newSectionBtn} onClick={openForm}>
+            + New Section
+          </button>
+        )}
+      </CollapsibleSection>
+
+      <div className={styles.divider} />
+      <CollapsibleSection title="Edge Types" storageKey="editor-edge-types">
+        <div className={styles.crossList}>
+          {building.edgeTypes.map((et) => (
+            <div key={et.id} className={styles.crossItem}>
+              <span
+                className={styles.etSwatch}
+                style={{ background: et.color }}
+              />
+              <span className={styles.etName}>{et.name}</span>
+              <span className={styles.etWeight}>
+                {et.weightMode === 'fixed'
+                  ? `Fixed: ${et.fixedWeight}`
+                  : et.lengthScalar === 1
+                    ? 'Length'
+                    : `Length × ${et.lengthScalar}`}
+              </span>
+              {!et.isAccessible && <span className={styles.etInaccessible}>no-access</span>}
+              {!et.isBuiltIn && (
                 <button
-                  className={styles.renameBtn}
-                  title="Edit section"
-                  onClick={(e) => { e.stopPropagation(); startEdit(s.id, s.name, s.floor); }}
+                  className={styles.deleteBtn}
+                  title="Delete edge type"
+                  onClick={() => dispatch({ type: 'DELETE_EDGE_TYPE', payload: { id: et.id } })}
                 >
-                  ✎
+                  ×
                 </button>
               )}
             </div>
-            {editingSectionId === s.id && (
-              <div className={styles.editForm}>
-                <SectionForm
-                  name={editForm.name}
-                  floor={editForm.floor}
-                  file={editForm.file}
-                  onNameChange={(v) => setEditForm((p) => ({ ...p, name: v }))}
-                  onFloorChange={(v) => setEditForm((p) => ({ ...p, floor: v }))}
-                  onFileChange={(f) => setEditForm((p) => ({ ...p, file: f }))}
-                  onSubmit={commitEdit}
-                  onCancel={() => setEditingSectionId(null)}
-                  submitLabel="Save"
-                  submitting={editImporting}
-                  submitDisabled={editImporting}
-                  filePlaceholder="Replace image…"
-                  fileAccept="image/*"
-                  autoFocus
+          ))}
+        </div>
+
+        {showEtForm ? (
+          <div className={styles.form}>
+            <input
+              className={styles.formInput}
+              autoFocus
+              placeholder="Edge type name"
+              value={etForm.name}
+              onChange={(e) => { setEtForm((p) => ({ ...p, name: e.target.value })); setEtError(''); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleAddEdgeType(); if (e.key === 'Escape') { setShowEtForm(false); setEtError(''); } e.stopPropagation(); }}
+            />
+            <div className={styles.formRow}>
+              <label className={styles.formLabel}>Weight</label>
+              <label className={styles.etRadioLabel}>
+                <input type="radio" checked={etForm.weightMode === 'length'} onChange={() => setEtForm((p) => ({ ...p, weightMode: 'length' }))} />
+                Length-based
+              </label>
+              <label className={styles.etRadioLabel}>
+                <input type="radio" checked={etForm.weightMode === 'fixed'} onChange={() => setEtForm((p) => ({ ...p, weightMode: 'fixed' }))} />
+                Fixed
+              </label>
+            </div>
+            {etForm.weightMode === 'fixed' && (
+              <div className={styles.formRow}>
+                <label className={styles.formLabel}>Value</label>
+                <input
+                  className={clsx(styles.formInput, styles.formInputNarrow)}
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={etForm.fixedWeight}
+                  onChange={(e) => setEtForm((p) => ({ ...p, fixedWeight: e.target.value }))}
+                  onKeyDown={(e) => e.stopPropagation()}
                 />
               </div>
             )}
-          </div>
-        ))}
-      </div>
-
-      {showForm ? (
-        <div className={styles.form}>
-          <SectionForm
-            name={form.name}
-            floor={form.floor}
-            file={form.file}
-            onNameChange={(v) => setForm((p) => ({ ...p, name: v }))}
-            onFloorChange={(v) => setForm((p) => ({ ...p, floor: v }))}
-            onFileChange={(f) => setForm((p) => ({ ...p, file: f }))}
-            onSubmit={handleSubmit}
-            onCancel={() => setShowForm(false)}
-            submitLabel="Add"
-            submitting={importing}
-            submitDisabled={!form.file || importing}
-            filePlaceholder="Choose image or PDF…"
-            fileAccept="image/*,application/pdf"
-            autoFocus
-          />
-        </div>
-      ) : (
-        <button className={styles.newSectionBtn} onClick={openForm}>
-          + New Section
-        </button>
-      )}
-
-      <div className={styles.divider} />
-      <div className={styles.sectionHeader}>Edge Types</div>
-      <div className={styles.crossList}>
-        {building.edgeTypes.map((et) => (
-          <div key={et.id} className={styles.crossItem}>
-            <span
-              className={styles.etSwatch}
-              style={{ background: et.color }}
-            />
-            <span className={styles.etName}>{et.name}</span>
-            <span className={styles.etWeight}>
-              {et.weightMode === 'fixed'
-                ? `Fixed: ${et.fixedWeight}`
-                : et.lengthScalar === 1
-                  ? 'Length'
-                  : `Length × ${et.lengthScalar}`}
-            </span>
-            {!et.isAccessible && <span className={styles.etInaccessible}>no-access</span>}
-            {!et.isBuiltIn && (
-              <button
-                className={styles.deleteBtn}
-                title="Delete edge type"
-                onClick={() => dispatch({ type: 'DELETE_EDGE_TYPE', payload: { id: et.id } })}
-              >
-                ×
-              </button>
+            {etForm.weightMode === 'length' && (
+              <div className={styles.formRow}>
+                <label className={styles.formLabel}>Scalar</label>
+                <input
+                  className={clsx(styles.formInput, styles.formInputNarrow)}
+                  type="number"
+                  min={0.01}
+                  step={0.01}
+                  value={etForm.lengthScalar}
+                  onChange={(e) => setEtForm((p) => ({ ...p, lengthScalar: e.target.value }))}
+                  onKeyDown={(e) => e.stopPropagation()}
+                />
+              </div>
             )}
-          </div>
-        ))}
-      </div>
-
-      {showEtForm ? (
-        <div className={styles.form}>
-          <input
-            className={styles.formInput}
-            autoFocus
-            placeholder="Edge type name"
-            value={etForm.name}
-            onChange={(e) => { setEtForm((p) => ({ ...p, name: e.target.value })); setEtError(''); }}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleAddEdgeType(); if (e.key === 'Escape') { setShowEtForm(false); setEtError(''); } e.stopPropagation(); }}
-          />
-          <div className={styles.formRow}>
-            <label className={styles.formLabel}>Weight</label>
-            <label className={styles.etRadioLabel}>
-              <input type="radio" checked={etForm.weightMode === 'length'} onChange={() => setEtForm((p) => ({ ...p, weightMode: 'length' }))} />
-              Length-based
-            </label>
-            <label className={styles.etRadioLabel}>
-              <input type="radio" checked={etForm.weightMode === 'fixed'} onChange={() => setEtForm((p) => ({ ...p, weightMode: 'fixed' }))} />
-              Fixed
-            </label>
-          </div>
-          {etForm.weightMode === 'fixed' && (
             <div className={styles.formRow}>
-              <label className={styles.formLabel}>Value</label>
-              <input
-                className={clsx(styles.formInput, styles.formInputNarrow)}
-                type="number"
-                min={1}
-                step={1}
-                value={etForm.fixedWeight}
-                onChange={(e) => setEtForm((p) => ({ ...p, fixedWeight: e.target.value }))}
-                onKeyDown={(e) => e.stopPropagation()}
-              />
+              <label className={clsx(styles.formLabel, styles.etCheckLabel)}>
+                <input
+                  type="checkbox"
+                  checked={etForm.isAccessible}
+                  onChange={(e) => setEtForm((p) => ({ ...p, isAccessible: e.target.checked }))}
+                />
+                Accessible route
+              </label>
             </div>
-          )}
-          {etForm.weightMode === 'length' && (
-            <div className={styles.formRow}>
-              <label className={styles.formLabel}>Scalar</label>
-              <input
-                className={clsx(styles.formInput, styles.formInputNarrow)}
-                type="number"
-                min={0.01}
-                step={0.01}
-                value={etForm.lengthScalar}
-                onChange={(e) => setEtForm((p) => ({ ...p, lengthScalar: e.target.value }))}
-                onKeyDown={(e) => e.stopPropagation()}
-              />
+            {etError && <div className={styles.etError}>{etError}</div>}
+            <div className={styles.formActions}>
+              <button className={styles.cancelBtn} onClick={() => { setShowEtForm(false); setEtError(''); }}>Cancel</button>
+              <button className={styles.addBtn} onClick={handleAddEdgeType}>Add</button>
             </div>
-          )}
-          <div className={styles.formRow}>
-            <label className={clsx(styles.formLabel, styles.etCheckLabel)}>
-              <input
-                type="checkbox"
-                checked={etForm.isAccessible}
-                onChange={(e) => setEtForm((p) => ({ ...p, isAccessible: e.target.checked }))}
-              />
-              Accessible route
-            </label>
           </div>
-          {etError && <div className={styles.etError}>{etError}</div>}
-          <div className={styles.formActions}>
-            <button className={styles.cancelBtn} onClick={() => { setShowEtForm(false); setEtError(''); }}>Cancel</button>
-            <button className={styles.addBtn} onClick={handleAddEdgeType}>Add</button>
-          </div>
-        </div>
-      ) : (
-        <button className={styles.newSectionBtn} onClick={() => setShowEtForm(true)}>
-          + Add Edge Type
-        </button>
-      )}
+        ) : (
+          <button className={styles.newSectionBtn} onClick={() => setShowEtForm(true)}>
+            + Add Edge Type
+          </button>
+        )}
+      </CollapsibleSection>
 
       {crossEdges.length > 0 && (
         <>
           <div className={styles.divider} />
-          <div className={styles.sectionHeader}>Cross-section links</div>
-          <div className={styles.crossList}>
-            {crossEdges.map((edge) => {
-              const src = nodeIndex.get(edge.srcId);
-              const tgt = nodeIndex.get(edge.tgtId);
-              const srcSec = src ? sectionIndex.get(src.sectionId) : undefined;
-              const tgtSec = tgt ? sectionIndex.get(tgt.sectionId) : undefined;
-              return (
-                <div key={edge.id} className={styles.crossItem}>
-                  <span className={styles.crossLabel}>
-                    <span className={styles.crossSec}>{srcSec?.name ?? '?'}</span>
-                    {': '}
-                    {src?.label || '(node)'}
-                    {' → '}
-                    <span className={styles.crossSec}>{tgtSec?.name ?? '?'}</span>
-                    {': '}
-                    {tgt?.label || '(node)'}
-                    {'  '}
-                    <span className={styles.crossType}>{edge.type}</span>
-                  </span>
-                  <button
-                    className={styles.deleteBtn}
-                    title="Delete link"
-                    onClick={() => dispatch({ type: 'DELETE_EDGE', payload: { id: edge.id } })}
-                  >
-                    ×
-                  </button>
-                </div>
-              );
-            })}
-          </div>
+          <CollapsibleSection title="Cross-section links" storageKey="editor-cross-links">
+            <div className={styles.crossList}>
+              {crossEdges.map((edge) => {
+                const src = nodeIndex.get(edge.srcId);
+                const tgt = nodeIndex.get(edge.tgtId);
+                const srcSec = src ? sectionIndex.get(src.sectionId) : undefined;
+                const tgtSec = tgt ? sectionIndex.get(tgt.sectionId) : undefined;
+                return (
+                  <div key={edge.id} className={styles.crossItem}>
+                    <span className={styles.crossLabel}>
+                      <span className={styles.crossSec}>{srcSec?.name ?? '?'}</span>
+                      {': '}
+                      {src?.label || '(node)'}
+                      {' → '}
+                      <span className={styles.crossSec}>{tgtSec?.name ?? '?'}</span>
+                      {': '}
+                      {tgt?.label || '(node)'}
+                      {'  '}
+                      <span className={styles.crossType}>{edge.type}</span>
+                    </span>
+                    <button
+                      className={styles.deleteBtn}
+                      title="Delete link"
+                      onClick={() => dispatch({ type: 'DELETE_EDGE', payload: { id: edge.id } })}
+                    >
+                      ×
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </CollapsibleSection>
         </>
       )}
       </div>

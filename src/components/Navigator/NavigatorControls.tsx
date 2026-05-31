@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import type { Building } from '../../types/graph';
 import { useMobile } from '../../hooks/useMobile';
 import { DirectionsPanel } from './DirectionsPanel';
+import { CollapsibleSection } from '../shared/CollapsibleSection';
 import styles from './NavigatorControls.module.css';
 
 type PickMode = 'src' | 'tgt' | null;
@@ -105,142 +106,147 @@ export function NavigatorControls({
 
   return (
     <div className={styles.controls}>
-      {/* From */}
-      <div className={styles.fieldBlock}>
-        <div className={styles.row}>
-          <label className={styles.label}>From</label>
-          <button
-            className={clsx(styles.pickBtn, pickMode === 'src' && styles.pickBtnActive)}
-            onClick={() => onPickModeChange(pickMode === 'src' ? null : 'src')}
-            title="Pick origin from map"
-          >
-            {pickMode === 'src' ? 'Picking…' : 'Pick'}
-          </button>
-        </div>
-        <select
-          className={styles.select}
-          value={srcId ?? ''}
-          disabled={noRooms}
-          onChange={(e) => onSrcChange(e.target.value || null)}
-        >
-          <option value="">— select origin —</option>
-          {renderRoomOptions(destMode === 'room' ? tgtId : null)}
-        </select>
-      </div>
-
-      {/* To */}
-      <div className={styles.fieldBlock}>
-        <div className={styles.row}>
-          <label className={styles.label}>To</label>
-          <div className={styles.modeToggle}>
+      <CollapsibleSection title="Route" storageKey="nav-route">
+        <div className={styles.fieldBlock}>
+          <div className={styles.row}>
+            <label className={styles.label}>From</label>
             <button
-              className={clsx(styles.modeBtn, destMode === 'room' && styles.modeBtnActive)}
-              onClick={() => handleDestModeChange('room')}
+              className={clsx(styles.pickBtn, pickMode === 'src' && styles.pickBtnActive)}
+              onClick={() => onPickModeChange(pickMode === 'src' ? null : 'src')}
+              title="Pick origin from map"
             >
-              Room
-            </button>
-            <button
-              className={clsx(styles.modeBtn, destMode === 'category' && styles.modeBtnActive)}
-              disabled={knownCategories.length === 0}
-              onClick={() => handleDestModeChange('category')}
-            >
-              {isMobile ? 'Nearest' : 'Nearest in category'}
+              {pickMode === 'src' ? 'Picking…' : 'Pick'}
             </button>
           </div>
-          {destMode === 'room' && (
-            <button
-              className={clsx(styles.pickBtn, pickMode === 'tgt' && styles.pickBtnActive)}
-              onClick={() => onPickModeChange(pickMode === 'tgt' ? null : 'tgt')}
-              title="Pick destination from map"
+          <select
+            className={styles.select}
+            value={srcId ?? ''}
+            disabled={noRooms}
+            onChange={(e) => onSrcChange(e.target.value || null)}
+          >
+            <option value="">— select origin —</option>
+            {renderRoomOptions(destMode === 'room' ? tgtId : null)}
+          </select>
+        </div>
+
+        <div className={styles.fieldBlock}>
+          <div className={styles.row}>
+            <label className={styles.label}>To</label>
+            <div className={styles.modeToggle}>
+              <button
+                className={clsx(styles.modeBtn, destMode === 'room' && styles.modeBtnActive)}
+                onClick={() => handleDestModeChange('room')}
+              >
+                Room
+              </button>
+              <button
+                className={clsx(styles.modeBtn, destMode === 'category' && styles.modeBtnActive)}
+                disabled={knownCategories.length === 0}
+                onClick={() => handleDestModeChange('category')}
+              >
+                {isMobile ? 'Nearest' : 'Nearest in category'}
+              </button>
+            </div>
+            {destMode === 'room' && (
+              <button
+                className={clsx(styles.pickBtn, pickMode === 'tgt' && styles.pickBtnActive)}
+                onClick={() => onPickModeChange(pickMode === 'tgt' ? null : 'tgt')}
+                title="Pick destination from map"
+              >
+                {pickMode === 'tgt' ? 'Picking…' : 'Pick'}
+              </button>
+            )}
+          </div>
+
+          {destMode === 'room' ? (
+            <select
+              className={styles.select}
+              value={tgtId ?? ''}
+              disabled={noRooms}
+              onChange={(e) => onTgtChange(e.target.value || null)}
             >
-              {pickMode === 'tgt' ? 'Picking…' : 'Pick'}
-            </button>
+              <option value="">— select destination —</option>
+              {renderRoomOptions(srcId)}
+            </select>
+          ) : (
+            <>
+              <select
+                className={styles.select}
+                value={tgtCategory ?? ''}
+                disabled={knownCategories.length === 0}
+                onChange={(e) => onTgtCategoryChange(e.target.value || null)}
+              >
+                <option value="">— select category —</option>
+                {knownCategories.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+              {tgtCategory && resolvedTgtLabel && (
+                <div className={styles.resolvedLabel}>
+                  Routing to: {resolvedTgtLabel}
+                </div>
+              )}
+              {tgtCategory && !resolvedTgtLabel && (
+                <div className={styles.resolvedLabelMissing}>
+                  No reachable room in this category
+                </div>
+              )}
+            </>
           )}
         </div>
 
-        {destMode === 'room' ? (
-          <select
-            className={styles.select}
-            value={tgtId ?? ''}
-            disabled={noRooms}
-            onChange={(e) => onTgtChange(e.target.value || null)}
-          >
-            <option value="">— select destination —</option>
-            {renderRoomOptions(srcId)}
-          </select>
-        ) : (
-          <>
-            <select
-              className={styles.select}
-              value={tgtCategory ?? ''}
-              disabled={knownCategories.length === 0}
-              onChange={(e) => onTgtCategoryChange(e.target.value || null)}
-            >
-              <option value="">— select category —</option>
-              {knownCategories.map((cat) => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-            {tgtCategory && resolvedTgtLabel && (
-              <div className={styles.resolvedLabel}>
-                Routing to: {resolvedTgtLabel}
-              </div>
-            )}
-            {tgtCategory && !resolvedTgtLabel && (
-              <div className={styles.resolvedLabelMissing}>
-                No reachable room in this category
-              </div>
-            )}
-          </>
+        {noRooms && (
+          <div className={styles.hint}>
+            Mark nodes as rooms in the Editor to enable navigation.
+          </div>
         )}
-      </div>
+
+        {error && <div className={styles.error}>{error}</div>}
+      </CollapsibleSection>
 
       <div className={styles.divider} />
 
-      {/* Edge type exclusion */}
-      <div className={styles.section}>
-        <div className={styles.sectionLabel}>Route options</div>
-        {building.edgeTypes.map((et) => {
-          const included = !excludedTypes.has(et.id);
-          return (
-            <label key={et.id} className={styles.typeRow}>
-              <input
-                type="checkbox"
-                checked={included}
-                onChange={(e) => toggleExcludedType(et.id, e.target.checked)}
-              />
-              <span className={styles.typeSwatch} style={{ background: et.color }} />
-              <span className={styles.typeName}>{et.name}</span>
-            </label>
-          );
-        })}
-      </div>
-
-      <div className={styles.divider} />
-
-      {/* Show directions toggle */}
-      <label className={styles.toggle}>
-        <input
-          type="checkbox"
-          checked={showDirections}
-          onChange={(e) => onDirectionsToggle(e.target.checked)}
-        />
-        <span>Show directions</span>
-      </label>
-
-      {noRooms && (
-        <div className={styles.hint}>
-          Mark nodes as rooms in the Editor to enable navigation.
+      <CollapsibleSection title="Route options" storageKey="nav-route-options">
+        <div className={styles.typeList}>
+          {building.edgeTypes.map((et) => {
+            const included = !excludedTypes.has(et.id);
+            return (
+              <label key={et.id} className={styles.typeRow}>
+                <input
+                  type="checkbox"
+                  checked={included}
+                  onChange={(e) => toggleExcludedType(et.id, e.target.checked)}
+                />
+                <span className={styles.typeSwatch} style={{ background: et.color }} />
+                <span className={styles.typeName}>{et.name}</span>
+              </label>
+            );
+          })}
         </div>
-      )}
+      </CollapsibleSection>
 
-      {error && <div className={styles.error}>{error}</div>}
+      <div className={styles.divider} />
+
+      <CollapsibleSection title="Directions" storageKey="nav-directions">
+        <div className={styles.directionBody}>
+          <label className={styles.toggle}>
+            <input
+              type="checkbox"
+              checked={showDirections}
+              onChange={(e) => onDirectionsToggle(e.target.checked)}
+            />
+            <span>Show directions</span>
+          </label>
+          {showDirections && path && path.length > 0 && (
+            <DirectionsPanel building={building} path={path} />
+          )}
+        </div>
+      </CollapsibleSection>
 
       {building.sections.length > 0 && (
         <>
           <div className={styles.divider} />
-          <div className={styles.section}>
-            <div className={styles.sectionLabel}>Sections</div>
+          <CollapsibleSection title="Sections" storageKey="nav-sections">
             <div className={styles.sectionList}>
               {building.sections.map((s) => (
                 <div
@@ -253,14 +259,7 @@ export function NavigatorControls({
                 </div>
               ))}
             </div>
-          </div>
-        </>
-      )}
-
-      {showDirections && path && path.length > 0 && (
-        <>
-          <div className={styles.divider} />
-          <DirectionsPanel building={building} path={path} />
+          </CollapsibleSection>
         </>
       )}
     </div>
