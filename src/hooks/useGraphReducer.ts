@@ -3,6 +3,7 @@ import type { Building, Section, Node, Edge, EdgeTypeDef } from '../types/graph'
 import { euclideanWeight } from '../utils/geometry';
 import { DEFAULT_EDGE_TYPES, CUSTOM_TYPE_COLORS, computeEdgeWeight } from '../utils/pathfinding';
 import { generateId } from '../utils/id';
+import { saveImage, getAllImages } from '../utils/imageStore';
 
 // ---------------------------------------------------------------------------
 // Action types
@@ -30,6 +31,12 @@ export type Action =
 
 const STORAGE_KEY = 'office-navigator-state';
 
+// Captured at module load time, before useReducer can strip or overwrite it.
+// Used by hydrateImages() to detect and migrate legacy imageData from localStorage.
+const _rawStoredState = (() => {
+  try { return localStorage.getItem(STORAGE_KEY); } catch { return null; }
+})();
+
 function emptyBuilding(): Building {
   return { sections: [], nodes: [], edges: [], edgeTypes: DEFAULT_EDGE_TYPES };
 }
@@ -43,8 +50,14 @@ function migrateBuilding(b: Building): Building {
 
 function loadFromStorage(): Building {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return migrateBuilding(JSON.parse(raw) as Building);
+    if (_rawStoredState) {
+      const parsed = migrateBuilding(JSON.parse(_rawStoredState) as Building);
+      // Strip imageData — images are loaded from IndexedDB separately
+      return {
+        ...parsed,
+        sections: parsed.sections.map((s) => ({ ...s, imageData: '' })),
+      };
+    }
   } catch {
     // ignore
   }
@@ -301,15 +314,60 @@ export function useGraphReducer() {
   }, []);
 
   useEffect(() => {
+    // Write structure only (no imageData) to localStorage
+    const stripped: Building = {
+      ...state,
+      sections: state.sections.map((s) => ({ ...s, imageData: '' })),
+    };
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(stripped));
       setStorageError(false);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'QuotaExceededError') {
         setStorageError(true);
       }
     }
+
+    // Persist images to IndexedDB (fire-and-forget)
+    for (const section of state.sections) {
+      if (section.imageData) {
+        saveImage(section.id, section.imageData).catch(console.error);
+      }
+    }
   }, [state]);
+
+  // On mount: migrate legacy imageData from localStorage to IndexedDB, then hydrate state
+  useEffect(() => {
+    async function hydrateImages() {
+      try {
+        if (_rawStoredState) {
+          const parsed = JSON.parse(_rawStoredState) as Building;
+          const legacySections = (parsed.sections ?? []).filter((s) => s.imageData);
+          if (legacySections.length > 0) {
+            await Promise.all(legacySections.map((s) => saveImage(s.id, s.imageData)));
+          }
+        }
+
+        const images = await getAllImages();
+        if (images.size === 0) return;
+
+        baseDispatch({
+          type: 'LOAD_BUILDING',
+          payload: {
+            ...stateRef.current,
+            sections: stateRef.current.sections.map((s) => ({
+              ...s,
+              imageData: images.get(s.id) ?? s.imageData,
+            })),
+          },
+        });
+      } catch (err) {
+        console.error('Failed to load images from IndexedDB:', err);
+      }
+    }
+
+    hydrateImages();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { state, dispatch, undo, storageError };
 }
