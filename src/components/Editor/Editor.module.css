@@ -4,6 +4,15 @@
   height: 100%;
 }
 
+.storageWarning {
+  background: #7a2a00;
+  color: #ffd0b0;
+  font-size: 13px;
+  padding: 8px 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
 .body {
   display: flex;
   flex: 1;

@@ -1,4 +1,4 @@
-import { useReducer, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import { useReducer, useEffect, useLayoutEffect, useRef, useCallback, useState } from 'react';
 import type { Building, Section, Node, Edge, EdgeTypeDef } from '../types/graph';
 import { euclideanWeight } from '../utils/geometry';
 import { DEFAULT_EDGE_TYPES, CUSTOM_TYPE_COLORS, computeEdgeWeight } from '../utils/pathfinding';
@@ -279,6 +279,7 @@ const MAX_UNDO = 20;
 
 export function useGraphReducer() {
   const [state, baseDispatch] = useReducer(reducer, undefined, loadFromStorage);
+  const [storageError, setStorageError] = useState(false);
 
   const undoStack = useRef<Building[]>([]);
   const stateRef = useRef(state);
@@ -302,10 +303,13 @@ export function useGraphReducer() {
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch {
-      // ignore storage failures
+      setStorageError(false);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'QuotaExceededError') {
+        setStorageError(true);
+      }
     }
   }, [state]);
 
-  return { state, dispatch, undo };
+  return { state, dispatch, undo, storageError };
 }

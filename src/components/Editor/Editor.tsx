@@ -11,7 +11,7 @@ import { EditorCanvas } from './EditorCanvas';
 import { EditorSidebar } from './EditorSidebar';
 
 export function Editor() {
-  const { state, dispatch, undo } = useGraphReducer();
+  const { state, dispatch, undo, storageError } = useGraphReducer();
   const { isMobile, isTablet } = useMobile();
   const isMobileOrTablet = isMobile || isTablet;
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -169,6 +169,11 @@ export function Editor() {
 
   return (
     <div className={styles.editor}>
+      {storageError && (
+        <div className={styles.storageWarning}>
+          Storage full — changes are not being saved. Export your work, then clear browser storage to continue.
+        </div>
+      )}
       <EditorToolbar
         building={state}
         activeSectionId={activeSectionId}
