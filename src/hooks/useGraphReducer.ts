@@ -31,11 +31,12 @@ export type Action =
 
 const STORAGE_KEY = 'office-navigator-state';
 
-// Captured at module load time, before useReducer can strip or overwrite it.
-// Used by hydrateImages() to detect and migrate legacy imageData from localStorage.
+// Captured at module load time, before the first saveToStorage effect can overwrite it.
+// Used only by hydrateImages() for one-time legacy migration detection.
 const _rawStoredState = (() => {
   try { return localStorage.getItem(STORAGE_KEY); } catch { return null; }
 })();
+let _migrationDone = false;
 
 function emptyBuilding(): Building {
   return { sections: [], nodes: [], edges: [], edgeTypes: DEFAULT_EDGE_TYPES };
@@ -50,8 +51,9 @@ function migrateBuilding(b: Building): Building {
 
 function loadFromStorage(): Building {
   try {
-    if (_rawStoredState) {
-      const parsed = migrateBuilding(JSON.parse(_rawStoredState) as Building);
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = migrateBuilding(JSON.parse(raw) as Building);
       // Strip imageData — images are loaded from IndexedDB separately
       return {
         ...parsed,
@@ -340,12 +342,13 @@ export function useGraphReducer() {
   useEffect(() => {
     async function hydrateImages() {
       try {
-        if (_rawStoredState) {
+        if (!_migrationDone && _rawStoredState) {
           const parsed = JSON.parse(_rawStoredState) as Building;
           const legacySections = (parsed.sections ?? []).filter((s) => s.imageData);
           if (legacySections.length > 0) {
             await Promise.all(legacySections.map((s) => saveImage(s.id, s.imageData)));
           }
+          _migrationDone = true;
         }
 
         const images = await getAllImages();
