@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import clsx from 'clsx';
 import { Editor } from '../Editor/Editor';
 import { Navigator } from '../Navigator/Navigator';
 import { ErrorBoundary } from './ErrorBoundary';
-import { useMobile } from '../../hooks/useMobile';
+import { useGraphReducer } from '../../hooks/useGraphReducer';
 import styles from './AppShell.module.css';
 
 type AppMode = 'editor' | 'navigator';
@@ -20,7 +20,21 @@ function loadMode(): AppMode {
 
 export function AppShell() {
   const [mode, setMode] = useState<AppMode>(loadMode);
-  const { isMobile } = useMobile();
+  const { state, dispatch, undo, storageError } = useGraphReducer();
+
+  const [nameDraft, setNameDraft] = useState(state.name);
+  const nameFocusedRef = useRef(false);
+  useEffect(() => {
+    if (!nameFocusedRef.current) setNameDraft(state.name);
+  }, [state.name]);
+
+  const commitName = () => {
+    const trimmed = nameDraft.trim() || 'Untitled Building';
+    setNameDraft(trimmed);
+    if (trimmed !== state.name) {
+      dispatch({ type: 'UPDATE_BUILDING_NAME', payload: { name: trimmed } });
+    }
+  };
 
   useEffect(() => {
     try { localStorage.setItem(MODE_KEY, mode); } catch { /* ignore */ }
@@ -29,7 +43,18 @@ export function AppShell() {
   return (
     <div className={styles.shell}>
       <header className={styles.topBar}>
-        <span className={styles.appName}>{isMobile ? 'Mapper' : 'Office Navigator'}</span>
+        {mode === 'editor' ? (
+          <input
+            className={styles.appNameInput}
+            value={nameDraft}
+            onChange={(e) => setNameDraft(e.target.value)}
+            onFocus={() => { nameFocusedRef.current = true; }}
+            onBlur={() => { nameFocusedRef.current = false; commitName(); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+          />
+        ) : (
+          <span className={styles.appName}>{state.name}</span>
+        )}
         <div className={styles.modeToggle}>
           <button
             className={clsx(styles.modeBtn, mode === 'editor' && styles.modeBtnActive)}
@@ -48,11 +73,11 @@ export function AppShell() {
       <main className={styles.main}>
         {mode === 'editor' ? (
           <ErrorBoundary label="Editor">
-            <Editor />
+            <Editor state={state} dispatch={dispatch} undo={undo} storageError={storageError} />
           </ErrorBoundary>
         ) : (
           <ErrorBoundary label="Navigator">
-            <Navigator />
+            <Navigator state={state} />
           </ErrorBoundary>
         )}
       </main>

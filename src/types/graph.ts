@@ -13,6 +13,7 @@ export interface EdgeTypeDef {
 }
 
 export interface Building {
+  name: string;
   sections: Section[];
   nodes: Node[];
   edges: Edge[];

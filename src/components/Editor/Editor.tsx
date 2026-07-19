@@ -1,5 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
-import { useGraphReducer } from '../../hooks/useGraphReducer';
+import type { Dispatch } from 'react';
+import type { Building } from '../../types/graph';
+import type { Action } from '../../hooks/useGraphReducer';
 import { useZoomPan, DEFAULT_ZOOM_PAN } from '../../hooks/useZoomPan';
 import { useMobile } from '../../hooks/useMobile';
 import styles from './Editor.module.css';
@@ -10,8 +12,14 @@ import { EditorToolbar } from './EditorToolbar';
 import { EditorCanvas } from './EditorCanvas';
 import { EditorSidebar } from './EditorSidebar';
 
-export function Editor() {
-  const { state, dispatch, undo, storageError } = useGraphReducer();
+interface EditorProps {
+  state: Building;
+  dispatch: Dispatch<Action>;
+  undo: () => void;
+  storageError: boolean;
+}
+
+export function Editor({ state, dispatch, undo, storageError }: EditorProps) {
   const { isMobile, isTablet } = useMobile();
   const isMobileOrTablet = isMobile || isTablet;
   const [sidebarOpen, setSidebarOpen] = useState(false);

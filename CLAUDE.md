@@ -48,7 +48,7 @@ src/
       NavigatorControls.tsx  # origin/destination dropdowns, category routing, directions toggle
       DirectionsPanel.tsx    # toggleable waypoint instruction list
     shared/
-      AppShell.tsx           # top-level layout, mode toggle
+      AppShell.tsx           # top-level layout, mode toggle, owns useGraphReducer instance
       ErrorBoundary.tsx      # error boundary wrapper
   hooks/
     useGraphReducer.ts       # useReducer for all graph state + localStorage sync
@@ -90,6 +90,7 @@ interface EdgeTypeDef {
 }
 
 interface Building {
+  name: string;            // displayed in the top bar; editable in Editor mode, read-only in Navigator mode
   sections: Section[];
   nodes: Node[];
   edges: Edge[];
@@ -156,6 +157,7 @@ is displayed.
 All mutations to Building state go through the reducer. No direct state mutation elsewhere.
 
 Action types:
+- `UPDATE_BUILDING_NAME` — rename the building (shown in the top bar)
 - `ADD_SECTION` — add a new section (floor + image)
 - `UPDATE_SECTION` — rename a section or change its floor number
 - `UPDATE_SECTION_IMAGE` — set/replace the image for a section

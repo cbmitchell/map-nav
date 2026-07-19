@@ -10,6 +10,7 @@ import { saveImage, getAllImages, deleteImage } from '../utils/imageStore';
 // ---------------------------------------------------------------------------
 
 export type Action =
+  | { type: 'UPDATE_BUILDING_NAME'; payload: { name: string } }
   | { type: 'ADD_SECTION'; payload: Section }
   | { type: 'UPDATE_SECTION'; payload: { id: string; name?: string; floor?: number } }
   | { type: 'UPDATE_SECTION_IMAGE'; payload: { id: string; imageData: string; imageW: number; imageH: number } }
@@ -40,15 +41,21 @@ const _rawStoredState = (() => {
 })();
 let _migrationDone = false;
 
+const DEFAULT_BUILDING_NAME = 'Untitled Building';
+
 function emptyBuilding(): Building {
-  return { sections: [], nodes: [], edges: [], edgeTypes: DEFAULT_EDGE_TYPES };
+  return { name: DEFAULT_BUILDING_NAME, sections: [], nodes: [], edges: [], edgeTypes: DEFAULT_EDGE_TYPES };
 }
 
 function migrateBuilding(b: Building): Building {
-  if (!b.edgeTypes || b.edgeTypes.length === 0) {
-    return { ...b, edgeTypes: DEFAULT_EDGE_TYPES };
+  let result = b;
+  if (!result.edgeTypes || result.edgeTypes.length === 0) {
+    result = { ...result, edgeTypes: DEFAULT_EDGE_TYPES };
   }
-  return b;
+  if (!result.name) {
+    result = { ...result, name: DEFAULT_BUILDING_NAME };
+  }
+  return result;
 }
 
 function loadFromStorage(): Building {
@@ -104,6 +111,10 @@ function nextCustomColor(edgeTypes: EdgeTypeDef[]): string {
 
 function reducer(state: Building, action: Action): Building {
   switch (action.type) {
+    case 'UPDATE_BUILDING_NAME': {
+      return { ...state, name: action.payload.name };
+    }
+
     case 'ADD_SECTION': {
       return { ...state, sections: [...state.sections, action.payload] };
     }

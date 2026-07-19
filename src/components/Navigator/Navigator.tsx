@@ -1,6 +1,6 @@
 import { useState, useLayoutEffect, useMemo, useCallback, useRef } from 'react';
 import clsx from 'clsx';
-import { useGraphReducer } from '../../hooks/useGraphReducer';
+import type { Building } from '../../types/graph';
 import styles from './Navigator.module.css';
 import { usePathfinder } from '../../hooks/usePathfinder';
 import { useZoomPan, DEFAULT_ZOOM_PAN } from '../../hooks/useZoomPan';
@@ -10,8 +10,11 @@ import { NavigatorCanvas } from './NavigatorCanvas';
 
 type PickMode = 'src' | 'tgt' | null;
 
-export function Navigator() {
-  const { state } = useGraphReducer();
+interface NavigatorProps {
+  state: Building;
+}
+
+export function Navigator({ state }: NavigatorProps) {
   const [srcId, setSrcId] = useState<string | null>(null);
   const [tgtId, setTgtId] = useState<string | null>(null);
   const [tgtCategory, setTgtCategory] = useState<string | null>(null);
