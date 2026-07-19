@@ -78,6 +78,7 @@ export function EditorCanvas({
   const contentHRef = useRef(0);
   const dragRef = useRef<{ nodeId: string } | null>(null);
   const panRef = useRef<{ lastX: number; lastY: number } | null>(null);
+  const pendingClickRef = useRef<{ startX: number; startY: number; panned: boolean } | null>(null);
   const touchRef = useRef<{ lastX: number; lastY: number } | null>(null);
   const lastTapRef = useRef<{ time: number; x: number; y: number } | null>(null);
   const spaceRef = useRef(false);
@@ -246,7 +247,7 @@ export function EditorCanvas({
 
     if (e.button !== 0) return;
 
-    // Space held — start pan
+    // Space held — start pan (overrides all interactions)
     if (spaceRef.current) {
       panRef.current = { lastX: screen.x, lastY: screen.y };
       if (canvasRef.current) canvasRef.current.style.cursor = 'grabbing';
@@ -272,21 +273,8 @@ export function EditorCanvas({
         }
       }
 
-      const sectionEdges = getSectionEdges(sectionNodes);
-      const nodeIndex = new Map(buildingRef.current.nodes.map((n) => [n.id, n]));
-      for (const edge of sectionEdges) {
-        const src = nodeIndex.get(edge.srcId)!;
-        const tgt = nodeIndex.get(edge.tgtId)!;
-        const { x: sx, y: sy } = contentToScreen(src.nx * W, src.ny * H);
-        const { x: tx, y: ty } = contentToScreen(tgt.nx * W, tgt.ny * H);
-        if (distanceToSegment(screen.x, screen.y, sx, sy, tx, ty) < 6) {
-          onEditorStateChange({ selectedEdgeId: edge.id, selectedNodeId: null });
-          setEdgeEditor({ edgeId: edge.id, screenX: (sx + tx) / 2, screenY: (sy + ty) / 2 });
-          return;
-        }
-      }
-
-      onEditorStateChange({ selectedNodeId: null, selectedEdgeId: null });
+      // No node hit — set up pending action: pan on drag, click-to-select/deselect on release
+      pendingClickRef.current = { startX: screen.x, startY: screen.y, panned: false };
     }
 
     if (es.mode === 'node') {
@@ -294,37 +282,8 @@ export function EditorCanvas({
         if (hitNodeScreen(screen.x, screen.y, node)) return;
       }
       if (!activeSectionIdRef.current) return;
-      const norm = px2norm(x, y, W, H);
-      const clampedNorm = {
-        x: Math.max(0, Math.min(1, norm.x)),
-        y: Math.max(0, Math.min(1, norm.y)),
-      };
-
-      // If the click lands near an existing edge, split it instead of placing a free node
-      const sectionEdges = getSectionEdges(sectionNodes);
-      const edgeNodeIndex = new Map(buildingRef.current.nodes.map((n) => [n.id, n]));
-      for (const edge of sectionEdges) {
-        const edgeSrc = edgeNodeIndex.get(edge.srcId)!;
-        const edgeTgt = edgeNodeIndex.get(edge.tgtId)!;
-        const { x: sx, y: sy } = contentToScreen(edgeSrc.nx * W, edgeSrc.ny * H);
-        const { x: tx, y: ty } = contentToScreen(edgeTgt.nx * W, edgeTgt.ny * H);
-        if (distanceToSegment(screen.x, screen.y, sx, sy, tx, ty) < 8) {
-          dispatch({ type: 'SPLIT_EDGE', payload: { edgeId: edge.id, nx: clampedNorm.x, ny: clampedNorm.y }, canvasW: W, canvasH: H });
-          return;
-        }
-      }
-
-      dispatch({
-        type: 'ADD_NODE',
-        payload: {
-          sectionId: activeSectionIdRef.current,
-          nx: clampedNorm.x,
-          ny: clampedNorm.y,
-          label: '',
-          isRoom: false,
-          isConnector: false,
-        },
-      });
+      // Set up pending action: pan on drag, place/split on release
+      pendingClickRef.current = { startX: screen.x, startY: screen.y, panned: false };
     }
 
     if (es.mode === 'edge') {
@@ -356,7 +315,8 @@ export function EditorCanvas({
           return;
         }
       }
-      if (es.pendingEdgeSrcId) onEditorStateChange({ pendingEdgeSrcId: null });
+      // No node hit — set up pending action: pan on drag, cancel pending edge on release
+      pendingClickRef.current = { startX: screen.x, startY: screen.y, panned: false };
     }
 
     if (es.mode === 'link' && es.pendingLinkSrc) {
@@ -380,8 +340,8 @@ export function EditorCanvas({
           return;
         }
       }
-      // Clicked empty space — cancel link
-      onEditorStateChange({ mode: 'select', pendingLinkSrc: null });
+      // No node hit — set up pending action: pan on drag, cancel link on release
+      pendingClickRef.current = { startX: screen.x, startY: screen.y, panned: false };
     }
 
     if (es.mode === 'calibrate' && !calibratePopup) {
@@ -401,7 +361,18 @@ export function EditorCanvas({
   const handleMouseMove = (e: React.MouseEvent) => {
     const screen = getScreenCoords(e);
 
-    // Pan (middle button or space+drag)
+    // Promote pending click to pan if mouse moved beyond threshold
+    if (pendingClickRef.current && !pendingClickRef.current.panned) {
+      const dx = screen.x - pendingClickRef.current.startX;
+      const dy = screen.y - pendingClickRef.current.startY;
+      if (Math.hypot(dx, dy) > 4) {
+        pendingClickRef.current.panned = true;
+        panRef.current = { lastX: screen.x, lastY: screen.y };
+        if (canvasRef.current) canvasRef.current.style.cursor = 'grabbing';
+      }
+    }
+
+    // Pan (middle button, space+drag, or default drag on empty space)
     if (panRef.current) {
       const dx = screen.x - panRef.current.lastX;
       const dy = screen.y - panRef.current.lastY;
@@ -439,7 +410,79 @@ export function EditorCanvas({
   };
 
   const handleMouseUp = (e: React.MouseEvent) => {
-    if (e.button === 1 || panRef.current) {
+    if (pendingClickRef.current) {
+      if (!pendingClickRef.current.panned) {
+        const es = esRef.current;
+        const sx = pendingClickRef.current.startX;
+        const sy = pendingClickRef.current.startY;
+
+        if (es.mode === 'select') {
+          const sectionNodes = getSectionNodes();
+          const sectionEdges = getSectionEdges(sectionNodes);
+          const nodeIndex = new Map(buildingRef.current.nodes.map((n) => [n.id, n]));
+          const canvas = canvasRef.current!;
+          const W = canvas.width;
+          const H = contentHRef.current;
+          let edgeHit = false;
+          for (const edge of sectionEdges) {
+            const src = nodeIndex.get(edge.srcId)!;
+            const tgt = nodeIndex.get(edge.tgtId)!;
+            const { x: ex, y: ey } = contentToScreen(src.nx * W, src.ny * H);
+            const { x: tx, y: ty } = contentToScreen(tgt.nx * W, tgt.ny * H);
+            if (distanceToSegment(sx, sy, ex, ey, tx, ty) < 6) {
+              onEditorStateChange({ selectedEdgeId: edge.id, selectedNodeId: null });
+              setEdgeEditor({ edgeId: edge.id, screenX: (ex + tx) / 2, screenY: (ey + ty) / 2 });
+              edgeHit = true;
+              break;
+            }
+          }
+          if (!edgeHit) {
+            onEditorStateChange({ selectedNodeId: null, selectedEdgeId: null });
+          }
+        }
+
+        if (es.mode === 'node' && activeSectionIdRef.current) {
+          const canvas = canvasRef.current!;
+          const W = canvas.width;
+          const H = contentHRef.current;
+          const { x, y } = screenToCanvas(sx, sy, zoomPanRef.current);
+          const norm = px2norm(x, y, W, H);
+          const clampedNorm = { x: Math.max(0, Math.min(1, norm.x)), y: Math.max(0, Math.min(1, norm.y)) };
+          const sectionNodes = getSectionNodes();
+          const sectionEdges = getSectionEdges(sectionNodes);
+          const edgeNodeIndex = new Map(buildingRef.current.nodes.map((n) => [n.id, n]));
+          let split = false;
+          for (const edge of sectionEdges) {
+            const edgeSrc = edgeNodeIndex.get(edge.srcId)!;
+            const edgeTgt = edgeNodeIndex.get(edge.tgtId)!;
+            const { x: esx, y: esy } = contentToScreen(edgeSrc.nx * W, edgeSrc.ny * H);
+            const { x: etx, y: ety } = contentToScreen(edgeTgt.nx * W, edgeTgt.ny * H);
+            if (distanceToSegment(sx, sy, esx, esy, etx, ety) < 8) {
+              dispatch({ type: 'SPLIT_EDGE', payload: { edgeId: edge.id, nx: clampedNorm.x, ny: clampedNorm.y }, canvasW: W, canvasH: H });
+              split = true;
+              break;
+            }
+          }
+          if (!split) {
+            dispatch({
+              type: 'ADD_NODE',
+              payload: { sectionId: activeSectionIdRef.current, nx: clampedNorm.x, ny: clampedNorm.y, label: '', isRoom: false, isConnector: false },
+            });
+          }
+        }
+
+        if (es.mode === 'edge' && es.pendingEdgeSrcId) {
+          onEditorStateChange({ pendingEdgeSrcId: null });
+        }
+
+        if (es.mode === 'link' && es.pendingLinkSrc) {
+          onEditorStateChange({ mode: 'select', pendingLinkSrc: null });
+        }
+      }
+      pendingClickRef.current = null;
+      panRef.current = null;
+      updateCursor();
+    } else if (e.button === 1 || panRef.current) {
       panRef.current = null;
       updateCursor();
     }
@@ -475,7 +518,9 @@ export function EditorCanvas({
     }
     if (panRef.current && !spaceRef.current) {
       panRef.current = null;
+      updateCursor();
     }
+    pendingClickRef.current = null;
   };
 
   // ---------------------------------------------------------------------------

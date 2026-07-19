@@ -39,6 +39,7 @@ export function NavigatorCanvas({
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const panRef = useRef<{ lastX: number; lastY: number } | null>(null);
+  const hasPannedRef = useRef(false);
   const spaceRef = useRef(false);
   const touchRef = useRef<{ lastX: number; lastY: number; lastDist: number } | null>(null);
   const zoomPanRef = useRef(zoomPan);
@@ -122,7 +123,7 @@ export function NavigatorCanvas({
       if (e.code === 'Space') {
         spaceRef.current = false;
         panRef.current = null;
-        if (canvasRef.current) canvasRef.current.style.cursor = 'default';
+        if (canvasRef.current) canvasRef.current.style.cursor = pickMode ? 'crosshair' : 'grab';
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -131,13 +132,14 @@ export function NavigatorCanvas({
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [onPickCancel]);
+  }, [onPickCancel, pickMode]);
 
   // ---------------------------------------------------------------------------
   // Mouse interaction (pan only)
   // ---------------------------------------------------------------------------
 
   const handleClick = (e: React.MouseEvent) => {
+    if (hasPannedRef.current || spaceRef.current) return;
     if (!pickMode) return;
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
@@ -181,9 +183,10 @@ export function NavigatorCanvas({
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
 
-    if (e.button === 1 || (e.button === 0 && spaceRef.current)) {
+    if (e.button === 1 || e.button === 0) {
       e.preventDefault();
       panRef.current = { lastX: sx, lastY: sy };
+      hasPannedRef.current = false;
       canvas.style.cursor = 'grabbing';
     }
   };
@@ -194,15 +197,18 @@ export function NavigatorCanvas({
     const rect = canvas.getBoundingClientRect();
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
-    onPan(sx - panRef.current.lastX, sy - panRef.current.lastY);
+    const dx = sx - panRef.current.lastX;
+    const dy = sy - panRef.current.lastY;
+    if (dx !== 0 || dy !== 0) hasPannedRef.current = true;
+    onPan(dx, dy);
     panRef.current = { lastX: sx, lastY: sy };
   };
 
   const handleMouseUp = (e: React.MouseEvent) => {
-    if (e.button === 1 || panRef.current) {
+    if (e.button === 1 || e.button === 0) {
       panRef.current = null;
       if (canvasRef.current)
-        canvasRef.current.style.cursor = spaceRef.current ? 'grab' : 'default';
+        canvasRef.current.style.cursor = spaceRef.current ? 'grab' : (pickMode ? 'crosshair' : 'grab');
     }
   };
 
@@ -270,7 +276,7 @@ export function NavigatorCanvas({
       ref={containerRef}
       className={styles.container}
       style={isSmall ? { height: '100%' } : undefined}
-      onMouseLeave={() => { panRef.current = null; }}
+      onMouseLeave={() => { panRef.current = null; hasPannedRef.current = false; }}
     >
       {!hasImage && (
         <div className={styles.placeholder}>
@@ -279,7 +285,7 @@ export function NavigatorCanvas({
       )}
       <canvas
         ref={canvasRef}
-        style={{ display: 'block', touchAction: 'none', cursor: pickMode ? 'crosshair' : undefined }}
+        style={{ display: 'block', touchAction: 'none', cursor: pickMode ? 'crosshair' : 'grab' }}
         onClick={handleClick}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
