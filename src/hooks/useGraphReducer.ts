@@ -16,7 +16,7 @@ export type Action =
   | { type: 'UPDATE_SECTION_IMAGE'; payload: { id: string; imageData: string; imageW: number; imageH: number } }
   | { type: 'DELETE_SECTION'; payload: { id: string } }
   | { type: 'ADD_NODE'; payload: Omit<Node, 'id'> }
-  | { type: 'UPDATE_NODE'; payload: Partial<Node> & { id: string }; canvasW?: number; canvasH?: number }
+  | { type: 'UPDATE_NODE'; payload: Partial<Node> & { id: string }; canvasW?: number; canvasH?: number; coalesce?: boolean }
   | { type: 'DELETE_NODE'; payload: { id: string } }
   | { type: 'ADD_EDGE'; payload: Omit<Edge, 'id'> }
   | { type: 'UPDATE_EDGE'; payload: Partial<Edge> & { id: string } }
@@ -349,9 +349,12 @@ export function useGraphReducer() {
   const prevSectionIdsRef = useRef<Set<string>>(new Set());
   useLayoutEffect(() => { stateRef.current = state; });
 
-  // Stable dispatch wrapper that snapshots state before each mutation
+  // Stable dispatch wrapper that snapshots state before each mutation.
+  // UPDATE_NODE dispatches with coalesce: true (continuation moves within a single node
+  // drag) skip the snapshot so the whole drag undoes as one step.
   const dispatch = useCallback((action: Action) => {
-    if (action.type !== 'LOAD_BUILDING') {
+    const skipSnapshot = action.type === 'LOAD_BUILDING' || (action.type === 'UPDATE_NODE' && action.coalesce);
+    if (!skipSnapshot) {
       undoStack.current = [stateRef.current, ...undoStack.current].slice(0, MAX_UNDO);
     }
     baseDispatch(action);

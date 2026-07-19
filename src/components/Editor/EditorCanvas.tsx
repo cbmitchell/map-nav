@@ -76,7 +76,7 @@ export function EditorCanvas({
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const contentHRef = useRef(0);
-  const dragRef = useRef<{ nodeId: string } | null>(null);
+  const dragRef = useRef<{ nodeId: string; moved: boolean } | null>(null);
   const panRef = useRef<{ lastX: number; lastY: number } | null>(null);
   const pendingClickRef = useRef<{ startX: number; startY: number; panned: boolean } | null>(null);
   const touchRef = useRef<{ lastX: number; lastY: number } | null>(null);
@@ -268,7 +268,7 @@ export function EditorCanvas({
       for (const node of sectionNodes) {
         if (hitNodeScreen(screen.x, screen.y, node)) {
           onEditorStateChange({ selectedNodeId: node.id, selectedEdgeId: null });
-          dragRef.current = { nodeId: node.id };
+          dragRef.current = { nodeId: node.id, moved: false };
           return;
         }
       }
@@ -404,7 +404,9 @@ export function EditorCanvas({
         },
         canvasW: W,
         canvasH: H,
+        coalesce: dragRef.current.moved,
       });
+      dragRef.current.moved = true;
     }
 
   };
@@ -579,7 +581,7 @@ export function EditorCanvas({
       for (const node of sectionNodes) {
         if (hitNodeScreen(sx, sy, node)) {
           onEditorStateChange({ selectedNodeId: node.id, selectedEdgeId: null });
-          dragRef.current = { nodeId: node.id };
+          dragRef.current = { nodeId: node.id, moved: false };
           return;
         }
       }
@@ -703,7 +705,9 @@ export function EditorCanvas({
         payload: { id: dragRef.current.nodeId, nx: Math.max(0, Math.min(1, norm.x)), ny: Math.max(0, Math.min(1, norm.y)) },
         canvasW: W,
         canvasH: H,
+        coalesce: dragRef.current.moved,
       });
+      dragRef.current.moved = true;
       return;
     }
 
