@@ -8,8 +8,6 @@ import type { ZoomPanState } from '../../hooks/useZoomPan';
 import { NavigatorControls } from './NavigatorControls';
 import { NavigatorCanvas } from './NavigatorCanvas';
 
-type PickMode = 'src' | 'tgt' | null;
-
 interface NavigatorProps {
   state: Building;
 }
@@ -20,7 +18,6 @@ export function Navigator({ state }: NavigatorProps) {
   const [tgtCategory, setTgtCategory] = useState<string | null>(null);
   const [excludedTypes, setExcludedTypes] = useState<Set<string>>(new Set());
   const [showDirections, setShowDirections] = useState(false);
-  const [pickMode, setPickMode] = useState<PickMode>(null);
   const [preferredSectionId, setPreferredSectionId] = useState<string | null>(null);
   const activeSectionId = preferredSectionId ?? state.sections[0]?.id ?? null;
   const { zoomPan, handleWheel, pan, zoomAt, setView } = useZoomPan();
@@ -65,12 +62,6 @@ export function Navigator({ state }: NavigatorProps) {
     setTgtCategory(cat);
     setTgtId(null);
   }, []);
-
-  const handleNodePick = useCallback((nodeId: string) => {
-    if (pickMode === 'src') handleSrcChange(nodeId);
-    else if (pickMode === 'tgt') handleTgtChange(nodeId);
-    setPickMode(null);
-  }, [pickMode, handleSrcChange, handleTgtChange]);
 
   // When routing by category, resolve the destination room name from the path's last node
   const resolvedTgtLabel = useMemo(() => {
@@ -140,7 +131,6 @@ export function Navigator({ state }: NavigatorProps) {
           path={path}
           error={error}
           resolvedTgtLabel={resolvedTgtLabel}
-          pickMode={pickMode}
           onSrcChange={handleSrcChange}
           onTgtChange={handleTgtChange}
           onTgtCategoryChange={handleTgtCategoryChange}
@@ -148,7 +138,6 @@ export function Navigator({ state }: NavigatorProps) {
           onSectionChange={switchSection}
           onExcludedTypesChange={setExcludedTypes}
           onDirectionsToggle={setShowDirections}
-          onPickModeChange={setPickMode}
         />
 
         <div className={styles.canvasArea}>
@@ -160,9 +149,6 @@ export function Navigator({ state }: NavigatorProps) {
             onWheel={handleWheel}
             onPan={pan}
             onZoomAt={zoomAt}
-            pickMode={pickMode}
-            onNodePick={handleNodePick}
-            onPickCancel={() => setPickMode(null)}
             onSetOrigin={handleSrcChange}
             onSetDestination={handleTgtChange}
           />

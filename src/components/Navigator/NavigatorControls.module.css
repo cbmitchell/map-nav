@@ -65,24 +65,6 @@
   background: rgba(55, 138, 221, 0.1);
 }
 
-.pickBtn {
-  padding: 4px 8px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-default);
-  border-radius: 4px;
-  color: var(--text-dim);
-  font-size: 11px;
-  cursor: pointer;
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
-.pickBtnActive {
-  border-color: var(--accent-blue);
-  color: var(--accent-blue);
-  background: rgba(55, 138, 221, 0.15);
-}
-
 .resolvedLabel {
   font-size: 11px;
   color: var(--accent-blue-lt);

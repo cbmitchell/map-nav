@@ -8,8 +8,6 @@ import { SearchableSelect } from '../shared/SearchableSelect';
 import type { SearchableSelectOption } from '../shared/SearchableSelect';
 import styles from './NavigatorControls.module.css';
 
-type PickMode = 'src' | 'tgt' | null;
-
 interface NavigatorControlsProps {
   building: Building;
   srcId: string | null;
@@ -20,14 +18,12 @@ interface NavigatorControlsProps {
   path: string[] | null;
   error: string | null;
   resolvedTgtLabel: string | null;
-  pickMode: PickMode;
   activeSectionId: string | null;
   onSrcChange: (id: string | null) => void;
   onTgtChange: (id: string | null) => void;
   onTgtCategoryChange: (category: string | null) => void;
   onExcludedTypesChange: (types: Set<string>) => void;
   onDirectionsToggle: (v: boolean) => void;
-  onPickModeChange: (mode: PickMode) => void;
   onSectionChange: (id: string) => void;
 }
 
@@ -41,14 +37,12 @@ export function NavigatorControls({
   path,
   error,
   resolvedTgtLabel,
-  pickMode,
   activeSectionId,
   onSrcChange,
   onTgtChange,
   onTgtCategoryChange,
   onExcludedTypesChange,
   onDirectionsToggle,
-  onPickModeChange,
   onSectionChange,
 }: NavigatorControlsProps) {
   const [destMode, setDestMode] = useState<'room' | 'category'>('room');
@@ -106,13 +100,6 @@ export function NavigatorControls({
         <div className={styles.fieldBlock}>
           <div className={styles.row}>
             <label className={styles.label}>From</label>
-            <button
-              className={clsx(styles.pickBtn, pickMode === 'src' && styles.pickBtnActive)}
-              onClick={() => onPickModeChange(pickMode === 'src' ? null : 'src')}
-              title="Pick origin from map"
-            >
-              {pickMode === 'src' ? 'Picking…' : 'Pick'}
-            </button>
           </div>
           <SearchableSelect
             options={roomSelectOptions(destMode === 'room' ? tgtId : null)}
@@ -141,15 +128,6 @@ export function NavigatorControls({
                 {isMobile ? 'Nearest' : 'Nearest in category'}
               </button>
             </div>
-            {destMode === 'room' && (
-              <button
-                className={clsx(styles.pickBtn, pickMode === 'tgt' && styles.pickBtnActive)}
-                onClick={() => onPickModeChange(pickMode === 'tgt' ? null : 'tgt')}
-                title="Pick destination from map"
-              >
-                {pickMode === 'tgt' ? 'Picking…' : 'Pick'}
-              </button>
-            )}
           </div>
 
           {destMode === 'room' ? (

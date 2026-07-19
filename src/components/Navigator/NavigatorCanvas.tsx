@@ -7,8 +7,6 @@ import styles from './NavigatorCanvas.module.css';
 
 const HIT_RADIUS = 12;
 
-type PickMode = 'src' | 'tgt' | null;
-
 interface NodeMenuState {
   nodeId: string;
   label: string;
@@ -28,9 +26,6 @@ interface NavigatorCanvasProps {
   onWheel: (e: WheelEvent, rect: DOMRect) => void;
   onPan: (dx: number, dy: number) => void;
   onZoomAt: (screenX: number, screenY: number, newScale: number) => void;
-  pickMode: PickMode;
-  onNodePick: (nodeId: string) => void;
-  onPickCancel: () => void;
   onSetOrigin: (nodeId: string) => void;
   onSetDestination: (nodeId: string) => void;
 }
@@ -43,9 +38,6 @@ export function NavigatorCanvas({
   onWheel,
   onPan,
   onZoomAt,
-  pickMode,
-  onNodePick,
-  onPickCancel,
   onSetOrigin,
   onSetDestination,
 }: NavigatorCanvasProps) {
@@ -73,25 +65,15 @@ export function NavigatorCanvas({
     activeSectionIdRef.current = activeSectionId;
   });
 
-  // Close the click/tap node menu when the active section changes (its screen-space
-  // position is meaningless after switching sections) or when explicit pick mode is
-  // turned on (which supersedes the click menu). Adjusting state during render — rather
-  // than in an effect, and tracked via useState rather than a ref so it stays pure —
-  // is React's recommended pattern for reacting to a prop/state change like this:
+  // Close the click/tap node menu when the active section changes — its screen-space
+  // position is meaningless after switching sections. Adjusting state during render —
+  // rather than in an effect, and tracked via useState rather than a ref so it stays
+  // pure — is React's recommended pattern for reacting to a prop change like this:
   // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
-  const [prevMenuResetDeps, setPrevMenuResetDeps] = useState({ activeSectionId, pickMode });
-  if (
-    prevMenuResetDeps.activeSectionId !== activeSectionId ||
-    prevMenuResetDeps.pickMode !== pickMode
-  ) {
-    setPrevMenuResetDeps({ activeSectionId, pickMode });
-    if (
-      nodeMenu !== null &&
-      (prevMenuResetDeps.activeSectionId !== activeSectionId ||
-        (pickMode && !prevMenuResetDeps.pickMode))
-    ) {
-      setNodeMenu(null);
-    }
+  const [prevSectionId, setPrevSectionId] = useState(activeSectionId);
+  if (prevSectionId !== activeSectionId) {
+    setPrevSectionId(activeSectionId);
+    if (nodeMenu !== null) setNodeMenu(null);
   }
 
   const { redraw } = useCanvasRenderer(
@@ -145,11 +127,10 @@ export function NavigatorCanvas({
     return () => canvas.removeEventListener('wheel', handler);
   }, [onWheel]);
 
-  // Space key pan mode + Escape to cancel pick mode
+  // Space key pan mode + Escape to close the node menu
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Escape') {
-        onPickCancel();
         setNodeMenu(null);
         return;
       }
@@ -167,7 +148,7 @@ export function NavigatorCanvas({
       if (e.code === 'Space') {
         spaceRef.current = false;
         panRef.current = null;
-        if (canvasRef.current) canvasRef.current.style.cursor = pickMode ? 'crosshair' : 'grab';
+        if (canvasRef.current) canvasRef.current.style.cursor = 'grab';
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -176,7 +157,7 @@ export function NavigatorCanvas({
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [onPickCancel, pickMode]);
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Mouse interaction (pan only)
@@ -215,19 +196,9 @@ export function NavigatorCanvas({
     const section = buildingRef.current.sections.find(
       (s) => s.id === activeSectionIdRef.current,
     );
-    if (!section) { onPickCancel(); return; }
+    if (!section) { setNodeMenu(null); return; }
 
-    if (pickMode) {
-      const hit = hitTestRoomNode(sx, sy);
-      if (hit) {
-        onNodePick(hit.id);
-      } else {
-        onPickCancel();
-      }
-      return;
-    }
-
-    // Not in pick mode — clicking a room node opens a menu to set it as origin/destination
+    // Clicking a room node opens a menu to set it as origin/destination
     const hit = hitTestRoomNode(sx, sy);
     setNodeMenu(hit ? { nodeId: hit.id, label: hit.label, screenX: sx, screenY: sy, canvasW: canvas.width } : null);
   };
@@ -264,8 +235,7 @@ export function NavigatorCanvas({
   const handleMouseUp = (e: React.MouseEvent) => {
     if (e.button === 1 || e.button === 0) {
       panRef.current = null;
-      if (canvasRef.current)
-        canvasRef.current.style.cursor = spaceRef.current ? 'grab' : (pickMode ? 'crosshair' : 'grab');
+      if (canvasRef.current) canvasRef.current.style.cursor = 'grab';
     }
   };
 
@@ -358,7 +328,7 @@ export function NavigatorCanvas({
       )}
       <canvas
         ref={canvasRef}
-        style={{ display: 'block', touchAction: 'none', cursor: pickMode ? 'crosshair' : 'grab' }}
+        style={{ display: 'block', touchAction: 'none', cursor: 'grab' }}
         onClick={handleClick}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}

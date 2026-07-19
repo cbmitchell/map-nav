@@ -255,16 +255,13 @@ They are listed in the EditorSidebar under "Cross-section connections."
 
 The navigator supports two destination modes:
 
-- **Room** — origin and destination are selected from dropdown menus populated with all nodes where `isRoom === true`, grouped by section name.
+- **Room** — origin and destination are selected from searchable dropdowns (`SearchableSelect`, `src/components/shared/`) populated with all nodes where `isRoom === true`, grouped by section name.
 - **Nearest in category** — destination is the closest node (by path weight) whose `category` matches the selected string. Uses `dijkstraToCategory()` in `src/utils/pathfinding.ts`.
 
 The user's current section view updates automatically to show the origin node's section when a selection is made.
 
-Rooms can also be picked directly on the map: the sidebar's "Pick" buttons put the canvas
-into an explicit pick mode (crosshair cursor) that assigns the next clicked room node to
-that field. Independently, clicking a room node while *not* in pick mode opens a small
-context menu at the click point with "Set origin" / "Set destination" options
-(`NavigatorCanvas.tsx`).
+Rooms can also be picked directly on the map: clicking a room node opens a small context
+menu at the click point with "Set origin" / "Set destination" options (`NavigatorCanvas.tsx`).
 
 ### Pathfinding
 
