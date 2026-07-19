@@ -3,7 +3,7 @@ import type { Building, Section, Node, Edge, EdgeTypeDef } from '../types/graph'
 import { euclideanWeight } from '../utils/geometry';
 import { DEFAULT_EDGE_TYPES, CUSTOM_TYPE_COLORS, computeEdgeWeight } from '../utils/pathfinding';
 import { generateId } from '../utils/id';
-import { saveImage, getAllImages } from '../utils/imageStore';
+import { saveImage, getAllImages, deleteImage } from '../utils/imageStore';
 
 // ---------------------------------------------------------------------------
 // Action types
@@ -13,6 +13,7 @@ export type Action =
   | { type: 'ADD_SECTION'; payload: Section }
   | { type: 'UPDATE_SECTION'; payload: { id: string; name?: string; floor?: number } }
   | { type: 'UPDATE_SECTION_IMAGE'; payload: { id: string; imageData: string; imageW: number; imageH: number } }
+  | { type: 'DELETE_SECTION'; payload: { id: string } }
   | { type: 'ADD_NODE'; payload: Omit<Node, 'id'> }
   | { type: 'UPDATE_NODE'; payload: Partial<Node> & { id: string }; canvasW?: number; canvasH?: number }
   | { type: 'DELETE_NODE'; payload: { id: string } }
@@ -21,6 +22,7 @@ export type Action =
   | { type: 'DELETE_EDGE'; payload: { id: string } }
   | { type: 'SPLIT_EDGE'; payload: { edgeId: string; nx: number; ny: number }; canvasW?: number; canvasH?: number }
   | { type: 'ADD_EDGE_TYPE'; payload: Omit<EdgeTypeDef, 'id' | 'color' | 'dashPattern' | 'isBuiltIn'> }
+  | { type: 'UPDATE_EDGE_TYPE'; payload: Omit<EdgeTypeDef, 'id' | 'color' | 'dashPattern' | 'isBuiltIn'> & { id: string } }
   | { type: 'DELETE_EDGE_TYPE'; payload: { id: string } }
   | { type: 'CALIBRATE_SECTION'; payload: { sectionId: string; scale: number } }
   | { type: 'LOAD_BUILDING'; payload: Building };
@@ -122,6 +124,17 @@ function reducer(state: Building, action: Action): Building {
             ? { ...s, imageData: action.payload.imageData, imageW: action.payload.imageW, imageH: action.payload.imageH }
             : s,
         ),
+      };
+    }
+
+    case 'DELETE_SECTION': {
+      const { id } = action.payload;
+      const removedNodeIds = new Set(state.nodes.filter((n) => n.sectionId === id).map((n) => n.id));
+      return {
+        ...state,
+        sections: state.sections.filter((s) => s.id !== id),
+        nodes: state.nodes.filter((n) => n.sectionId !== id),
+        edges: state.edges.filter((e) => !removedNodeIds.has(e.srcId) && !removedNodeIds.has(e.tgtId)),
       };
     }
 
@@ -241,6 +254,30 @@ function reducer(state: Building, action: Action): Building {
       return { ...state, edgeTypes: [...state.edgeTypes, newType] };
     }
 
+    case 'UPDATE_EDGE_TYPE': {
+      const { id, ...updates } = action.payload;
+      const typeDef = state.edgeTypes.find((t) => t.id === id);
+      if (!typeDef) return state;
+      const updatedType: EdgeTypeDef = { ...typeDef, ...updates };
+      const nodeIndex = new Map(state.nodes.map((n) => [n.id, n]));
+      const sectionIndex = new Map(state.sections.map((s) => [s.id, s]));
+      return {
+        ...state,
+        edgeTypes: state.edgeTypes.map((t) => (t.id === id ? updatedType : t)),
+        edges: state.edges.map((e) => {
+          if (e.type !== id) return e;
+          const src = nodeIndex.get(e.srcId);
+          const tgt = nodeIndex.get(e.tgtId);
+          if (!src || !tgt) return e;
+          const section = sectionIndex.get(src.sectionId);
+          const W = section?.imageW ?? 1;
+          const H = section?.imageH ?? 1;
+          const sectionScale = section?.scale ?? 1.0;
+          return { ...e, weight: computeEdgeWeight(updatedType, src, tgt, W, H, sectionScale) };
+        }),
+      };
+    }
+
     case 'DELETE_EDGE_TYPE': {
       const { id } = action.payload;
       const typeDef = state.edgeTypes.find((t) => t.id === id);
@@ -298,6 +335,7 @@ export function useGraphReducer() {
 
   const undoStack = useRef<Building[]>([]);
   const stateRef = useRef(state);
+  const prevSectionIdsRef = useRef<Set<string>>(new Set());
   useLayoutEffect(() => { stateRef.current = state; });
 
   // Stable dispatch wrapper that snapshots state before each mutation
@@ -336,6 +374,13 @@ export function useGraphReducer() {
         saveImage(section.id, section.imageData).catch(console.error);
       }
     }
+
+    // Purge images for sections that have been removed
+    const currentIds = new Set(state.sections.map((s) => s.id));
+    for (const prevId of prevSectionIdsRef.current) {
+      if (!currentIds.has(prevId)) deleteImage(prevId).catch(console.error);
+    }
+    prevSectionIdsRef.current = currentIds;
   }, [state]);
 
   // On mount: migrate legacy imageData from localStorage to IndexedDB, then hydrate state

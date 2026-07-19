@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import clsx from 'clsx';
-import type { Dispatch } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import type { Building } from '../../types/graph';
 import type { Action } from '../../hooks/useGraphReducer';
 import type { EdgeTypeDef } from '../../types/graph';
@@ -102,14 +102,8 @@ function SectionForm({
 }
 
 // ---------------------------------------------------------------------------
-// Sidebar
+// Shared edge type form
 // ---------------------------------------------------------------------------
-
-interface FormState {
-  name: string;
-  floor: string;
-  file: File | null;
-}
 
 interface EdgeTypeFormState {
   name: string;
@@ -127,6 +121,124 @@ const DEFAULT_ET_FORM: EdgeTypeFormState = {
   isAccessible: true,
 };
 
+function validateEdgeTypeForm(
+  form: EdgeTypeFormState,
+  edgeTypes: EdgeTypeDef[],
+  excludeId?: string,
+): { error: string } | { payload: Omit<EdgeTypeDef, 'id' | 'color' | 'dashPattern' | 'isBuiltIn'> } {
+  const name = form.name.trim();
+  if (!name) return { error: 'Name is required.' };
+  if (edgeTypes.some((t) => t.id !== excludeId && t.name.toLowerCase() === name.toLowerCase())) {
+    return { error: 'Name must be unique.' };
+  }
+  const fixedWeight = parseFloat(form.fixedWeight);
+  const lengthScalar = parseFloat(form.lengthScalar);
+  if (form.weightMode === 'fixed' && (isNaN(fixedWeight) || fixedWeight <= 0)) {
+    return { error: 'Fixed weight must be a positive number.' };
+  }
+  if (form.weightMode === 'length' && (isNaN(lengthScalar) || lengthScalar <= 0)) {
+    return { error: 'Scalar must be a positive number.' };
+  }
+  return {
+    payload: {
+      name,
+      weightMode: form.weightMode,
+      fixedWeight: isNaN(fixedWeight) ? 100 : fixedWeight,
+      lengthScalar: isNaN(lengthScalar) ? 1 : lengthScalar,
+      isAccessible: form.isAccessible,
+    },
+  };
+}
+
+interface EdgeTypeFormProps {
+  form: EdgeTypeFormState;
+  setForm: Dispatch<SetStateAction<EdgeTypeFormState>>;
+  error: string;
+  onSubmit: () => void;
+  onCancel: () => void;
+  submitLabel: string;
+  autoFocus?: boolean;
+}
+
+function EdgeTypeForm({ form, setForm, error, onSubmit, onCancel, submitLabel, autoFocus = false }: EdgeTypeFormProps) {
+  return (
+    <div className={styles.form}>
+      <input
+        className={styles.formInput}
+        autoFocus={autoFocus}
+        placeholder="Edge type name"
+        value={form.name}
+        onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+        onKeyDown={(e) => { if (e.key === 'Enter') onSubmit(); if (e.key === 'Escape') onCancel(); e.stopPropagation(); }}
+      />
+      <div className={styles.formRow}>
+        <label className={styles.formLabel}>Weight</label>
+        <label className={styles.etRadioLabel}>
+          <input type="radio" checked={form.weightMode === 'length'} onChange={() => setForm((p) => ({ ...p, weightMode: 'length' }))} />
+          Length-based
+        </label>
+        <label className={styles.etRadioLabel}>
+          <input type="radio" checked={form.weightMode === 'fixed'} onChange={() => setForm((p) => ({ ...p, weightMode: 'fixed' }))} />
+          Fixed
+        </label>
+      </div>
+      {form.weightMode === 'fixed' && (
+        <div className={styles.formRow}>
+          <label className={styles.formLabel}>Value</label>
+          <input
+            className={clsx(styles.formInput, styles.formInputNarrow)}
+            type="number"
+            min={1}
+            step={1}
+            value={form.fixedWeight}
+            onChange={(e) => setForm((p) => ({ ...p, fixedWeight: e.target.value }))}
+            onKeyDown={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+      {form.weightMode === 'length' && (
+        <div className={styles.formRow}>
+          <label className={styles.formLabel}>Scalar</label>
+          <input
+            className={clsx(styles.formInput, styles.formInputNarrow)}
+            type="number"
+            min={0.01}
+            step={0.01}
+            value={form.lengthScalar}
+            onChange={(e) => setForm((p) => ({ ...p, lengthScalar: e.target.value }))}
+            onKeyDown={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+      <div className={styles.formRow}>
+        <label className={clsx(styles.formLabel, styles.etCheckLabel)}>
+          <input
+            type="checkbox"
+            checked={form.isAccessible}
+            onChange={(e) => setForm((p) => ({ ...p, isAccessible: e.target.checked }))}
+          />
+          Accessible route
+        </label>
+      </div>
+      {error && <div className={styles.etError}>{error}</div>}
+      <div className={styles.formActions}>
+        <button className={styles.cancelBtn} onClick={onCancel}>Cancel</button>
+        <button className={styles.addBtn} onClick={onSubmit}>{submitLabel}</button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sidebar
+// ---------------------------------------------------------------------------
+
+interface FormState {
+  name: string;
+  floor: string;
+  file: File | null;
+}
+
 export function EditorSidebar({ building, activeSectionId, onSectionChange, dispatch, isMobileOrTablet, isOpen, onClose }: EditorSidebarProps) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<FormState>({ name: '', floor: '', file: null });
@@ -139,6 +251,10 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
   const [showEtForm, setShowEtForm] = useState(false);
   const [etForm, setEtForm] = useState<EdgeTypeFormState>(DEFAULT_ET_FORM);
   const [etError, setEtError] = useState('');
+
+  const [editingEdgeTypeId, setEditingEdgeTypeId] = useState<string | null>(null);
+  const [editEtForm, setEditEtForm] = useState<EdgeTypeFormState>(DEFAULT_ET_FORM);
+  const [editEtError, setEditEtError] = useState('');
 
   const nextFloor =
     building.sections.length > 0
@@ -249,32 +365,32 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
   };
 
   const handleAddEdgeType = () => {
-    const name = etForm.name.trim();
-    if (!name) { setEtError('Name is required.'); return; }
-    if (building.edgeTypes.some((t) => t.name.toLowerCase() === name.toLowerCase())) {
-      setEtError('Name must be unique.'); return;
-    }
-    const fixedWeight = parseFloat(etForm.fixedWeight);
-    const lengthScalar = parseFloat(etForm.lengthScalar);
-    if (etForm.weightMode === 'fixed' && (isNaN(fixedWeight) || fixedWeight <= 0)) {
-      setEtError('Fixed weight must be a positive number.'); return;
-    }
-    if (etForm.weightMode === 'length' && (isNaN(lengthScalar) || lengthScalar <= 0)) {
-      setEtError('Scalar must be a positive number.'); return;
-    }
-    dispatch({
-      type: 'ADD_EDGE_TYPE',
-      payload: {
-        name,
-        weightMode: etForm.weightMode,
-        fixedWeight: isNaN(fixedWeight) ? 100 : fixedWeight,
-        lengthScalar: isNaN(lengthScalar) ? 1 : lengthScalar,
-        isAccessible: etForm.isAccessible,
-      },
-    });
+    const result = validateEdgeTypeForm(etForm, building.edgeTypes);
+    if ('error' in result) { setEtError(result.error); return; }
+    dispatch({ type: 'ADD_EDGE_TYPE', payload: result.payload });
     setShowEtForm(false);
     setEtForm(DEFAULT_ET_FORM);
     setEtError('');
+  };
+
+  const startEditEdgeType = (et: EdgeTypeDef) => {
+    setEditingEdgeTypeId(et.id);
+    setEditEtForm({
+      name: et.name,
+      weightMode: et.weightMode,
+      fixedWeight: String(et.fixedWeight),
+      lengthScalar: et.lengthScalar.toFixed(2),
+      isAccessible: et.isAccessible,
+    });
+    setEditEtError('');
+  };
+
+  const handleUpdateEdgeType = () => {
+    if (!editingEdgeTypeId) return;
+    const result = validateEdgeTypeForm(editEtForm, building.edgeTypes, editingEdgeTypeId);
+    if ('error' in result) { setEditEtError(result.error); return; }
+    dispatch({ type: 'UPDATE_EDGE_TYPE', payload: { id: editingEdgeTypeId, ...result.payload } });
+    setEditingEdgeTypeId(null);
   };
 
   const crossEdges = building.edges.filter((e) => e.crossSection);
@@ -302,13 +418,27 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
                 <span className={styles.sectionName}>{s.name}</span>
                 <span className={styles.sectionFloor}>F{s.floor}</span>
                 {editingSectionId !== s.id && (
-                  <button
-                    className={styles.renameBtn}
-                    title="Edit section"
-                    onClick={(e) => { e.stopPropagation(); startEdit(s.id, s.name, s.floor); }}
-                  >
-                    ✎
-                  </button>
+                  <>
+                    <button
+                      className={styles.renameBtn}
+                      title="Edit section"
+                      onClick={(e) => { e.stopPropagation(); startEdit(s.id, s.name, s.floor); }}
+                    >
+                      ✎
+                    </button>
+                    <button
+                      className={styles.deleteBtn}
+                      title="Delete section"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (window.confirm(`Delete "${s.name}"? All nodes and edges on this floor will also be removed.`)) {
+                          dispatch({ type: 'DELETE_SECTION', payload: { id: s.id } });
+                        }
+                      }}
+                    >
+                      ×
+                    </button>
+                  </>
                 )}
               </div>
               {editingSectionId === s.id && (
@@ -365,98 +495,64 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
       <CollapsibleSection title="Edge Types" storageKey="editor-edge-types">
         <div className={styles.crossList}>
           {building.edgeTypes.map((et) => (
-            <div key={et.id} className={styles.crossItem}>
-              <span
-                className={styles.etSwatch}
-                style={{ background: et.color }}
-              />
-              <span className={styles.etName}>{et.name}</span>
-              <span className={styles.etWeight}>
-                {et.weightMode === 'fixed'
-                  ? `Fixed: ${et.fixedWeight}`
-                  : et.lengthScalar === 1
-                    ? 'Length'
-                    : `Length × ${et.lengthScalar}`}
-              </span>
-              {!et.isAccessible && <span className={styles.etInaccessible}>no-access</span>}
-              {!et.isBuiltIn && (
-                <button
-                  className={styles.deleteBtn}
-                  title="Delete edge type"
-                  onClick={() => dispatch({ type: 'DELETE_EDGE_TYPE', payload: { id: et.id } })}
-                >
-                  ×
-                </button>
+            <div key={et.id}>
+              {editingEdgeTypeId === et.id ? (
+                <EdgeTypeForm
+                  form={editEtForm}
+                  setForm={setEditEtForm}
+                  error={editEtError}
+                  onSubmit={handleUpdateEdgeType}
+                  onCancel={() => { setEditingEdgeTypeId(null); setEditEtError(''); }}
+                  submitLabel="Save"
+                  autoFocus
+                />
+              ) : (
+                <div className={styles.crossItem}>
+                  <span
+                    className={styles.etSwatch}
+                    style={{ background: et.color }}
+                  />
+                  <span className={styles.etName}>{et.name}</span>
+                  <span className={styles.etWeight}>
+                    {et.weightMode === 'fixed'
+                      ? `Fixed: ${et.fixedWeight}`
+                      : et.lengthScalar === 1
+                        ? 'Length'
+                        : `Length × ${et.lengthScalar}`}
+                  </span>
+                  {!et.isAccessible && <span className={styles.etInaccessible}>no-access</span>}
+                  <button
+                    className={styles.renameBtn}
+                    title="Edit edge type"
+                    onClick={() => startEditEdgeType(et)}
+                  >
+                    ✎
+                  </button>
+                  {!et.isBuiltIn && (
+                    <button
+                      className={styles.deleteBtn}
+                      title="Delete edge type"
+                      onClick={() => dispatch({ type: 'DELETE_EDGE_TYPE', payload: { id: et.id } })}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           ))}
         </div>
 
         {showEtForm ? (
-          <div className={styles.form}>
-            <input
-              className={styles.formInput}
-              autoFocus
-              placeholder="Edge type name"
-              value={etForm.name}
-              onChange={(e) => { setEtForm((p) => ({ ...p, name: e.target.value })); setEtError(''); }}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleAddEdgeType(); if (e.key === 'Escape') { setShowEtForm(false); setEtError(''); } e.stopPropagation(); }}
-            />
-            <div className={styles.formRow}>
-              <label className={styles.formLabel}>Weight</label>
-              <label className={styles.etRadioLabel}>
-                <input type="radio" checked={etForm.weightMode === 'length'} onChange={() => setEtForm((p) => ({ ...p, weightMode: 'length' }))} />
-                Length-based
-              </label>
-              <label className={styles.etRadioLabel}>
-                <input type="radio" checked={etForm.weightMode === 'fixed'} onChange={() => setEtForm((p) => ({ ...p, weightMode: 'fixed' }))} />
-                Fixed
-              </label>
-            </div>
-            {etForm.weightMode === 'fixed' && (
-              <div className={styles.formRow}>
-                <label className={styles.formLabel}>Value</label>
-                <input
-                  className={clsx(styles.formInput, styles.formInputNarrow)}
-                  type="number"
-                  min={1}
-                  step={1}
-                  value={etForm.fixedWeight}
-                  onChange={(e) => setEtForm((p) => ({ ...p, fixedWeight: e.target.value }))}
-                  onKeyDown={(e) => e.stopPropagation()}
-                />
-              </div>
-            )}
-            {etForm.weightMode === 'length' && (
-              <div className={styles.formRow}>
-                <label className={styles.formLabel}>Scalar</label>
-                <input
-                  className={clsx(styles.formInput, styles.formInputNarrow)}
-                  type="number"
-                  min={0.01}
-                  step={0.01}
-                  value={etForm.lengthScalar}
-                  onChange={(e) => setEtForm((p) => ({ ...p, lengthScalar: e.target.value }))}
-                  onKeyDown={(e) => e.stopPropagation()}
-                />
-              </div>
-            )}
-            <div className={styles.formRow}>
-              <label className={clsx(styles.formLabel, styles.etCheckLabel)}>
-                <input
-                  type="checkbox"
-                  checked={etForm.isAccessible}
-                  onChange={(e) => setEtForm((p) => ({ ...p, isAccessible: e.target.checked }))}
-                />
-                Accessible route
-              </label>
-            </div>
-            {etError && <div className={styles.etError}>{etError}</div>}
-            <div className={styles.formActions}>
-              <button className={styles.cancelBtn} onClick={() => { setShowEtForm(false); setEtError(''); }}>Cancel</button>
-              <button className={styles.addBtn} onClick={handleAddEdgeType}>Add</button>
-            </div>
-          </div>
+          <EdgeTypeForm
+            form={etForm}
+            setForm={setEtForm}
+            error={etError}
+            onSubmit={handleAddEdgeType}
+            onCancel={() => { setShowEtForm(false); setEtError(''); }}
+            submitLabel="Add"
+            autoFocus
+          />
         ) : (
           <button className={styles.newSectionBtn} onClick={() => setShowEtForm(true)}>
             + Add Edge Type

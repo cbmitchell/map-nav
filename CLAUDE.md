@@ -159,6 +159,7 @@ Action types:
 - `ADD_SECTION` — add a new section (floor + image)
 - `UPDATE_SECTION` — rename a section or change its floor number
 - `UPDATE_SECTION_IMAGE` — set/replace the image for a section
+- `DELETE_SECTION` — remove a section and cascade-delete all nodes/edges on it (including cross-section edges into other floors); cleans up the section's stored image
 - `ADD_NODE` — place a node on a section
 - `UPDATE_NODE` — update label, isRoom, isConnector, category, or position (position change recalculates affected edge weights)
 - `DELETE_NODE` — remove node and all its edges
@@ -167,6 +168,7 @@ Action types:
 - `DELETE_EDGE` — remove an edge
 - `SPLIT_EDGE` — insert a new unlabeled node at a point along an existing edge, replacing it with two edges
 - `ADD_EDGE_TYPE` — add a user-defined custom edge type
+- `UPDATE_EDGE_TYPE` — edit a custom or built-in edge type's name/weight/accessibility (recalculates weight for all edges using that type)
 - `DELETE_EDGE_TYPE` — remove a custom edge type (built-in types cannot be deleted); edges of that type are reassigned to `walkway`
 - `CALIBRATE_SECTION` — set `Section.scale` and recalculate all length-based edge weights for that section
 - `LOAD_BUILDING` — replace entire state (used for import)

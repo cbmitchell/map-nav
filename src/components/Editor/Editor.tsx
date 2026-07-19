@@ -109,6 +109,13 @@ export function Editor() {
     }
   }, [state.edgeTypes, editorState.currentEdgeType]);
 
+  // Fall back to the first available section if the preferred one was deleted
+  useEffect(() => {
+    if (preferredSectionId && !state.sections.some((s) => s.id === preferredSectionId)) {
+      setActiveSectionId(null);
+    }
+  }, [state.sections, preferredSectionId]);
+
   const handleSectionChange = useCallback(
     (newId: string) => {
       if (activeSectionId) {
