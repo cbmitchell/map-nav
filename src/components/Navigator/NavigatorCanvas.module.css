@@ -14,3 +14,81 @@
   pointer-events: none;
   z-index: 1;
 }
+
+/* Node context menu (desktop) */
+.menu {
+  position: absolute;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 10;
+  min-width: 150px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+/* Node context menu (mobile/tablet bottom sheet) */
+.menuSheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-raised);
+  border-top: 1px solid var(--border-strong);
+  border-radius: 12px 12px 0 0;
+  padding: 16px 20px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 300;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.6);
+}
+
+.menuDragHandle {
+  width: 40px;
+  height: 4px;
+  background: var(--border-strong);
+  border-radius: 2px;
+  margin: 0 auto 4px;
+}
+
+.menuBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 299;
+}
+
+.menuLabel {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 2px 6px 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menuBtn {
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  text-align: left;
+}
+
+.menuBtn:hover {
+  background: var(--bg-overlay);
+}
+
+@media (max-width: 1024px) {
+  .menuBtn {
+    padding: 12px 14px;
+    font-size: 15px;
+  }
+}

@@ -240,6 +240,12 @@ The navigator supports two destination modes:
 
 The user's current section view updates automatically to show the origin node's section when a selection is made.
 
+Rooms can also be picked directly on the map: the sidebar's "Pick" buttons put the canvas
+into an explicit pick mode (crosshair cursor) that assigns the next clicked room node to
+that field. Independently, clicking a room node while *not* in pick mode opens a small
+context menu at the click point with "Set origin" / "Set destination" options
+(`NavigatorCanvas.tsx`).
+
 ### Pathfinding
 
 Dijkstra's algorithm over the full graph (all sections, all nodes). Before running:
@@ -336,5 +342,3 @@ Deleting a custom type reassigns all its edges to `walkway`.
 - No multi-user support — single localStorage instance, single device
 - Navigator origin defaults to first room in list — a "current location" memory feature
   would improve repeated navigation sessions
-- Map-click selection in the navigator (as an alternative to dropdowns) is not implemented
-  in MVP but is a natural future addition

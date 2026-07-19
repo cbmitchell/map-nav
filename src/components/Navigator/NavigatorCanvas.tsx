@@ -1,4 +1,4 @@
-import { useRef, useLayoutEffect, useEffect } from 'react';
+import { useRef, useState, useLayoutEffect, useEffect } from 'react';
 import type { Building } from '../../types/graph';
 import type { ZoomPanState } from '../../hooks/useZoomPan';
 import { useCanvasRenderer } from '../../hooks/useCanvasRenderer';
@@ -8,6 +8,13 @@ import styles from './NavigatorCanvas.module.css';
 const HIT_RADIUS = 12;
 
 type PickMode = 'src' | 'tgt' | null;
+
+interface NodeMenuState {
+  nodeId: string;
+  label: string;
+  screenX: number;
+  screenY: number;
+}
 
 interface NavigatorCanvasProps {
   building: Building;
@@ -20,6 +27,8 @@ interface NavigatorCanvasProps {
   pickMode: PickMode;
   onNodePick: (nodeId: string) => void;
   onPickCancel: () => void;
+  onSetOrigin: (nodeId: string) => void;
+  onSetDestination: (nodeId: string) => void;
 }
 
 export function NavigatorCanvas({
@@ -33,6 +42,8 @@ export function NavigatorCanvas({
   pickMode,
   onNodePick,
   onPickCancel,
+  onSetOrigin,
+  onSetDestination,
 }: NavigatorCanvasProps) {
   const { isMobile, isTablet } = useMobile();
   const isSmall = isMobile || isTablet;
@@ -46,11 +57,23 @@ export function NavigatorCanvas({
   const buildingRef = useRef(building);
   const activeSectionIdRef = useRef(activeSectionId);
 
+  const [nodeMenu, setNodeMenu] = useState<NodeMenuState | null>(null);
+
   useLayoutEffect(() => {
     zoomPanRef.current = zoomPan;
     buildingRef.current = building;
     activeSectionIdRef.current = activeSectionId;
   });
+
+  // Screen-space menu position is meaningless after switching sections
+  useEffect(() => {
+    setNodeMenu(null);
+  }, [activeSectionId]);
+
+  // Entering explicit pick mode (via the sidebar "Pick" buttons) supersedes the click menu
+  useEffect(() => {
+    if (pickMode) setNodeMenu(null);
+  }, [pickMode]);
 
   const { redraw } = useCanvasRenderer(
     canvasRef,
@@ -107,6 +130,7 @@ export function NavigatorCanvas({
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Escape') {
         onPickCancel();
+        setNodeMenu(null);
         return;
       }
       if (e.code === 'Space' && !(e.target instanceof HTMLInputElement)) {
@@ -138,24 +162,14 @@ export function NavigatorCanvas({
   // Mouse interaction (pan only)
   // ---------------------------------------------------------------------------
 
-  const handleClick = (e: React.MouseEvent) => {
-    if (hasPannedRef.current || spaceRef.current) return;
-    if (!pickMode) return;
+  // Hit-test room nodes on the active section in screen space
+  const hitTestRoomNode = (sx: number, sy: number): { id: string; label: string } | null => {
     const canvas = canvasRef.current!;
-    const rect = canvas.getBoundingClientRect();
-    const sx = e.clientX - rect.left;
-    const sy = e.clientY - rect.top;
-    const section = buildingRef.current.sections.find(
-      (s) => s.id === activeSectionIdRef.current,
-    );
-    if (!section) { onPickCancel(); return; }
-
-    // Hit-test room nodes on the active section in screen space
     const sectionNodes = buildingRef.current.nodes.filter(
       (n) => n.sectionId === activeSectionIdRef.current && n.isRoom,
     );
 
-    let hit: string | null = null;
+    let hit: { id: string; label: string } | null = null;
     let bestDist = Infinity;
     for (const node of sectionNodes) {
       // node normalized coords → canvas pixel coords → screen coords
@@ -166,15 +180,36 @@ export function NavigatorCanvas({
       const dist = Math.hypot(sx - nodeScreenX, sy - nodeScreenY);
       if (dist < HIT_RADIUS && dist < bestDist) {
         bestDist = dist;
-        hit = node.id;
+        hit = { id: node.id, label: node.label || '(unlabeled)' };
       }
     }
+    return hit;
+  };
 
-    if (hit) {
-      onNodePick(hit);
-    } else {
-      onPickCancel();
+  const handleClick = (e: React.MouseEvent) => {
+    if (hasPannedRef.current || spaceRef.current) return;
+    const canvas = canvasRef.current!;
+    const rect = canvas.getBoundingClientRect();
+    const sx = e.clientX - rect.left;
+    const sy = e.clientY - rect.top;
+    const section = buildingRef.current.sections.find(
+      (s) => s.id === activeSectionIdRef.current,
+    );
+    if (!section) { onPickCancel(); return; }
+
+    if (pickMode) {
+      const hit = hitTestRoomNode(sx, sy);
+      if (hit) {
+        onNodePick(hit.id);
+      } else {
+        onPickCancel();
+      }
+      return;
     }
+
+    // Not in pick mode — clicking a room node opens a menu to set it as origin/destination
+    const hit = hitTestRoomNode(sx, sy);
+    setNodeMenu(hit ? { nodeId: hit.id, label: hit.label, screenX: sx, screenY: sy } : null);
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -182,6 +217,8 @@ export function NavigatorCanvas({
     const rect = canvas.getBoundingClientRect();
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
+
+    if (nodeMenu) setNodeMenu(null);
 
     if (e.button === 1 || e.button === 0) {
       e.preventDefault();
@@ -267,9 +304,26 @@ export function NavigatorCanvas({
   };
 
   // ---------------------------------------------------------------------------
+  // Node context menu
+  // ---------------------------------------------------------------------------
+
+  const handleSetOrigin = () => {
+    if (!nodeMenu) return;
+    onSetOrigin(nodeMenu.nodeId);
+    setNodeMenu(null);
+  };
+
+  const handleSetDestination = () => {
+    if (!nodeMenu) return;
+    onSetDestination(nodeMenu.nodeId);
+    setNodeMenu(null);
+  };
+
+  // ---------------------------------------------------------------------------
 
   const section = building.sections.find((s) => s.id === activeSectionId);
   const hasImage = !!section?.imageData;
+  const canvasW = canvasRef.current?.width ?? 400;
 
   return (
     <div
@@ -295,6 +349,24 @@ export function NavigatorCanvas({
         onTouchEnd={handleTouchEnd}
         onContextMenu={(e) => e.preventDefault()}
       />
+
+      {nodeMenu && (
+        <>
+          {isSmall && <div className={styles.menuBackdrop} onClick={() => setNodeMenu(null)} />}
+          <div
+            className={isSmall ? styles.menuSheet : styles.menu}
+            style={isSmall ? undefined : {
+              left: Math.min(nodeMenu.screenX + 8, canvasW - 160),
+              top: nodeMenu.screenY + 8,
+            }}
+          >
+            {isSmall && <div className={styles.menuDragHandle} />}
+            <div className={styles.menuLabel}>{nodeMenu.label}</div>
+            <button className={styles.menuBtn} onClick={handleSetOrigin}>Set origin</button>
+            <button className={styles.menuBtn} onClick={handleSetDestination}>Set destination</button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

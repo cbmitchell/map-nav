@@ -163,6 +163,8 @@ export function Navigator({ state }: NavigatorProps) {
             pickMode={pickMode}
             onNodePick={handleNodePick}
             onPickCancel={() => setPickMode(null)}
+            onSetOrigin={handleSrcChange}
+            onSetDestination={handleTgtChange}
           />
         </div>
       </div>
