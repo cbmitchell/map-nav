@@ -231,6 +231,173 @@ export function EditorCanvas({
   }
 
   // ---------------------------------------------------------------------------
+  // Shared per-mode tap handlers
+  //
+  // Mouse and touch disambiguate "tap" differently (mouse defers to a pending-click
+  // check on mouseup so a drag can turn into a pan; touch acts immediately on
+  // touchstart), so the two input paths can't fully share a single event handler.
+  // What they do share is what happens once a tap is confirmed — hit-testing plus the
+  // resulting dispatch — which is factored out here and called from both paths below.
+  // ---------------------------------------------------------------------------
+
+  // Select mode: hit-tests edges at the tap point (called after node hit-testing has
+  // already come up empty). Opens the edge editor and selects the edge if one is hit,
+  // otherwise deselects everything.
+  const trySelectEdgeAt = (screenX: number, screenY: number) => {
+    const sectionNodes = getSectionNodes();
+    const sectionEdges = getSectionEdges(sectionNodes);
+    const nodeIndex = new Map(buildingRef.current.nodes.map((n) => [n.id, n]));
+    const canvas = canvasRef.current!;
+    const W = canvas.width;
+    const H = contentHRef.current;
+    for (const edge of sectionEdges) {
+      const src = nodeIndex.get(edge.srcId)!;
+      const tgt = nodeIndex.get(edge.tgtId)!;
+      const { x: ex, y: ey } = contentToScreen(src.nx * W, src.ny * H);
+      const { x: tx, y: ty } = contentToScreen(tgt.nx * W, tgt.ny * H);
+      if (distanceToSegment(screenX, screenY, ex, ey, tx, ty) < 6) {
+        onEditorStateChange({ selectedEdgeId: edge.id, selectedNodeId: null });
+        setEdgeEditor({ edgeId: edge.id, screenX: (ex + tx) / 2, screenY: (ey + ty) / 2 });
+        return;
+      }
+    }
+    onEditorStateChange({ selectedNodeId: null, selectedEdgeId: null });
+  };
+
+  // Select mode: hit-tests a node at the tap point and opens its label editor.
+  // Used by both double-click (mouse) and double-tap (touch).
+  const tryOpenLabelEditorAt = (screenX: number, screenY: number): boolean => {
+    const sectionNodes = getSectionNodes();
+    for (const node of sectionNodes) {
+      if (!hitNodeScreen(screenX, screenY, node)) continue;
+      setEdgeEditor(null);
+      const canvas = canvasRef.current!;
+      const nodeScreen = contentToScreen(node.nx * canvas.width, node.ny * contentHRef.current);
+      setLabelEditor({
+        nodeId: node.id,
+        screenX: nodeScreen.x,
+        screenY: nodeScreen.y,
+        label: node.label,
+        isRoom: node.isRoom,
+        isConnector: node.isConnector,
+        category: node.category ?? '',
+      });
+      return true;
+    }
+    return false;
+  };
+
+  // Node mode: places a new unlabeled node at the tap point, or splits an existing
+  // edge into two if the tap landed on one.
+  const placeOrSplitNodeAt = (screenX: number, screenY: number) => {
+    if (!activeSectionIdRef.current) return;
+    const canvas = canvasRef.current!;
+    const W = canvas.width;
+    const H = contentHRef.current;
+    const { x, y } = screenToCanvas(screenX, screenY, zoomPanRef.current);
+    const norm = px2norm(x, y, W, H);
+    const clamped = { x: Math.max(0, Math.min(1, norm.x)), y: Math.max(0, Math.min(1, norm.y)) };
+    const sectionNodes = getSectionNodes();
+    const sectionEdges = getSectionEdges(sectionNodes);
+    const edgeNodeIndex = new Map(buildingRef.current.nodes.map((n) => [n.id, n]));
+    for (const edge of sectionEdges) {
+      const edgeSrc = edgeNodeIndex.get(edge.srcId)!;
+      const edgeTgt = edgeNodeIndex.get(edge.tgtId)!;
+      const { x: esx, y: esy } = contentToScreen(edgeSrc.nx * W, edgeSrc.ny * H);
+      const { x: etx, y: ety } = contentToScreen(edgeTgt.nx * W, edgeTgt.ny * H);
+      if (distanceToSegment(screenX, screenY, esx, esy, etx, ety) < 8) {
+        dispatch({ type: 'SPLIT_EDGE', payload: { edgeId: edge.id, nx: clamped.x, ny: clamped.y }, canvasW: W, canvasH: H });
+        return;
+      }
+    }
+    dispatch({
+      type: 'ADD_NODE',
+      payload: { sectionId: activeSectionIdRef.current, nx: clamped.x, ny: clamped.y, label: '', isRoom: false, isConnector: false },
+    });
+  };
+
+  // Edge mode: hit-tests nodes at the tap point and begins/cancels/completes a pending
+  // edge accordingly. Returns true if a node was hit (and thus handled), so callers can
+  // decide what "no node hit" means for their input method.
+  const tryHandleEdgeModeTap = (screenX: number, screenY: number): boolean => {
+    const es = esRef.current;
+    const canvas = canvasRef.current!;
+    const W = canvas.width;
+    const H = contentHRef.current;
+    const sectionNodes = getSectionNodes();
+    const nodeIndex = new Map(buildingRef.current.nodes.map((n) => [n.id, n]));
+    for (const node of sectionNodes) {
+      if (!hitNodeScreen(screenX, screenY, node)) continue;
+      if (!es.pendingEdgeSrcId) {
+        onEditorStateChange({ pendingEdgeSrcId: node.id });
+        return true;
+      }
+      if (es.pendingEdgeSrcId === node.id) {
+        onEditorStateChange({ pendingEdgeSrcId: null });
+        return true;
+      }
+      const srcNode = nodeIndex.get(es.pendingEdgeSrcId);
+      if (!srcNode) return true;
+      const type = es.currentEdgeType;
+      const typeDef = buildingRef.current.edgeTypes.find((t) => t.id === type);
+      const activeSection = buildingRef.current.sections.find((s) => s.id === activeSectionIdRef.current);
+      const imgW = activeSection?.imageW ?? W;
+      const imgH = activeSection?.imageH ?? H;
+      const sectionScale = activeSection?.scale ?? 1.0;
+      const weight = typeDef
+        ? computeEdgeWeight(typeDef, srcNode, node, imgW, imgH, sectionScale)
+        : euclideanWeight(srcNode, node, imgW, imgH) * sectionScale;
+      dispatch({
+        type: 'ADD_EDGE',
+        payload: { srcId: es.pendingEdgeSrcId, tgtId: node.id, type, weight, crossSection: false },
+      });
+      onEditorStateChange({ pendingEdgeSrcId: null });
+      return true;
+    }
+    return false;
+  };
+
+  // Link mode: hit-tests connector nodes at the tap point and completes the pending
+  // cross-section link if one is hit. Returns true if a node was hit (whether or not
+  // it was a valid connector), so callers' "no node hit" fallback doesn't double-fire.
+  const tryHandleLinkModeTap = (screenX: number, screenY: number): boolean => {
+    const es = esRef.current;
+    if (!es.pendingLinkSrc) return false;
+    const sectionNodes = getSectionNodes();
+    for (const node of sectionNodes) {
+      if (!hitNodeScreen(screenX, screenY, node)) continue;
+      if (!node.isConnector) return true; // only connector nodes can be cross-section targets
+      const type = es.currentEdgeType;
+      const typeDef = buildingRef.current.edgeTypes.find((t) => t.id === type);
+      const weight = typeDef?.weightMode === 'fixed' ? typeDef.fixedWeight : 100;
+      dispatch({
+        type: 'ADD_EDGE',
+        payload: { srcId: es.pendingLinkSrc.nodeId, tgtId: node.id, type, weight, crossSection: true },
+      });
+      onEditorStateChange({ mode: 'select', pendingLinkSrc: null });
+      return true;
+    }
+    return false;
+  };
+
+  // Calibrate mode: records the tap as calibration point A or B (content-space coords).
+  const handleCalibrateTap = (contentX: number, contentY: number) => {
+    const es = esRef.current;
+    if (es.mode !== 'calibrate' || calibratePopup) return;
+    const canvas = canvasRef.current!;
+    const norm = px2norm(contentX, contentY, canvas.width, contentHRef.current);
+    const clampedNx = Math.max(0, Math.min(1, norm.x));
+    const clampedNy = Math.max(0, Math.min(1, norm.y));
+    if (!es.calibrateA) {
+      onEditorStateChange({ calibrateA: { nx: clampedNx, ny: clampedNy } });
+    } else {
+      const b = { nx: clampedNx, ny: clampedNy };
+      onEditorStateChange({ calibrateB: b, mousePos: null });
+      setCalibratePopup({ a: es.calibrateA, b, distance: '' });
+    }
+  };
+
+  // ---------------------------------------------------------------------------
   // Mouse events
   // ---------------------------------------------------------------------------
 
@@ -255,9 +422,6 @@ export function EditorCanvas({
     }
 
     const { x, y } = getContentCoords(e);
-    const canvas = canvasRef.current!;
-    const W = canvas.width;
-    const H = contentHRef.current;
     const es = esRef.current;
     const sectionNodes = getSectionNodes();
 
@@ -287,75 +451,18 @@ export function EditorCanvas({
     }
 
     if (es.mode === 'edge') {
-      const nodeIndex = new Map(buildingRef.current.nodes.map((n) => [n.id, n]));
-      for (const node of sectionNodes) {
-        if (hitNodeScreen(screen.x, screen.y, node)) {
-          if (!es.pendingEdgeSrcId) {
-            onEditorStateChange({ pendingEdgeSrcId: node.id });
-            return;
-          }
-          if (es.pendingEdgeSrcId === node.id) {
-            onEditorStateChange({ pendingEdgeSrcId: null });
-            return;
-          }
-          const srcNode = nodeIndex.get(es.pendingEdgeSrcId);
-          if (!srcNode) return;
-          const type = es.currentEdgeType;
-          const typeDef = buildingRef.current.edgeTypes.find((t) => t.id === type);
-          const activeSection = buildingRef.current.sections.find((s) => s.id === activeSectionIdRef.current);
-          const imgW = activeSection?.imageW ?? W;
-          const imgH = activeSection?.imageH ?? H;
-          const sectionScale = activeSection?.scale ?? 1.0;
-          const weight = typeDef ? computeEdgeWeight(typeDef, srcNode, node, imgW, imgH, sectionScale) : euclideanWeight(srcNode, node, imgW, imgH) * sectionScale;
-          dispatch({
-            type: 'ADD_EDGE',
-            payload: { srcId: es.pendingEdgeSrcId, tgtId: node.id, type, weight, crossSection: false },
-          });
-          onEditorStateChange({ pendingEdgeSrcId: null });
-          return;
-        }
-      }
+      if (tryHandleEdgeModeTap(screen.x, screen.y)) return;
       // No node hit — set up pending action: pan on drag, cancel pending edge on release
       pendingClickRef.current = { startX: screen.x, startY: screen.y, panned: false };
     }
 
     if (es.mode === 'link' && es.pendingLinkSrc) {
-      for (const node of sectionNodes) {
-        if (hitNodeScreen(screen.x, screen.y, node)) {
-          if (!node.isConnector) return; // only connector nodes can be cross-section targets
-          const type = es.currentEdgeType;
-          const typeDef = buildingRef.current.edgeTypes.find((t) => t.id === type);
-          const weight = typeDef?.weightMode === 'fixed' ? typeDef.fixedWeight : 100;
-          dispatch({
-            type: 'ADD_EDGE',
-            payload: {
-              srcId: es.pendingLinkSrc.nodeId,
-              tgtId: node.id,
-              type,
-              weight,
-              crossSection: true,
-            },
-          });
-          onEditorStateChange({ mode: 'select', pendingLinkSrc: null });
-          return;
-        }
-      }
+      if (tryHandleLinkModeTap(screen.x, screen.y)) return;
       // No node hit — set up pending action: pan on drag, cancel link on release
       pendingClickRef.current = { startX: screen.x, startY: screen.y, panned: false };
     }
 
-    if (es.mode === 'calibrate' && !calibratePopup) {
-      const norm = px2norm(x, y, W, H);
-      const clampedNx = Math.max(0, Math.min(1, norm.x));
-      const clampedNy = Math.max(0, Math.min(1, norm.y));
-      if (!es.calibrateA) {
-        onEditorStateChange({ calibrateA: { nx: clampedNx, ny: clampedNy } });
-      } else {
-        const b = { nx: clampedNx, ny: clampedNy };
-        onEditorStateChange({ calibrateB: b, mousePos: null });
-        setCalibratePopup({ a: es.calibrateA, b, distance: '' });
-      }
-    }
+    handleCalibrateTap(x, y);
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
@@ -419,58 +526,11 @@ export function EditorCanvas({
         const sy = pendingClickRef.current.startY;
 
         if (es.mode === 'select') {
-          const sectionNodes = getSectionNodes();
-          const sectionEdges = getSectionEdges(sectionNodes);
-          const nodeIndex = new Map(buildingRef.current.nodes.map((n) => [n.id, n]));
-          const canvas = canvasRef.current!;
-          const W = canvas.width;
-          const H = contentHRef.current;
-          let edgeHit = false;
-          for (const edge of sectionEdges) {
-            const src = nodeIndex.get(edge.srcId)!;
-            const tgt = nodeIndex.get(edge.tgtId)!;
-            const { x: ex, y: ey } = contentToScreen(src.nx * W, src.ny * H);
-            const { x: tx, y: ty } = contentToScreen(tgt.nx * W, tgt.ny * H);
-            if (distanceToSegment(sx, sy, ex, ey, tx, ty) < 6) {
-              onEditorStateChange({ selectedEdgeId: edge.id, selectedNodeId: null });
-              setEdgeEditor({ edgeId: edge.id, screenX: (ex + tx) / 2, screenY: (ey + ty) / 2 });
-              edgeHit = true;
-              break;
-            }
-          }
-          if (!edgeHit) {
-            onEditorStateChange({ selectedNodeId: null, selectedEdgeId: null });
-          }
+          trySelectEdgeAt(sx, sy);
         }
 
         if (es.mode === 'node' && activeSectionIdRef.current) {
-          const canvas = canvasRef.current!;
-          const W = canvas.width;
-          const H = contentHRef.current;
-          const { x, y } = screenToCanvas(sx, sy, zoomPanRef.current);
-          const norm = px2norm(x, y, W, H);
-          const clampedNorm = { x: Math.max(0, Math.min(1, norm.x)), y: Math.max(0, Math.min(1, norm.y)) };
-          const sectionNodes = getSectionNodes();
-          const sectionEdges = getSectionEdges(sectionNodes);
-          const edgeNodeIndex = new Map(buildingRef.current.nodes.map((n) => [n.id, n]));
-          let split = false;
-          for (const edge of sectionEdges) {
-            const edgeSrc = edgeNodeIndex.get(edge.srcId)!;
-            const edgeTgt = edgeNodeIndex.get(edge.tgtId)!;
-            const { x: esx, y: esy } = contentToScreen(edgeSrc.nx * W, edgeSrc.ny * H);
-            const { x: etx, y: ety } = contentToScreen(edgeTgt.nx * W, edgeTgt.ny * H);
-            if (distanceToSegment(sx, sy, esx, esy, etx, ety) < 8) {
-              dispatch({ type: 'SPLIT_EDGE', payload: { edgeId: edge.id, nx: clampedNorm.x, ny: clampedNorm.y }, canvasW: W, canvasH: H });
-              split = true;
-              break;
-            }
-          }
-          if (!split) {
-            dispatch({
-              type: 'ADD_NODE',
-              payload: { sectionId: activeSectionIdRef.current, nx: clampedNorm.x, ny: clampedNorm.y, label: '', isRoom: false, isConnector: false },
-            });
-          }
+          placeOrSplitNodeAt(sx, sy);
         }
 
         if (es.mode === 'edge' && es.pendingEdgeSrcId) {
@@ -494,24 +554,7 @@ export function EditorCanvas({
   const handleDblClick = (e: React.MouseEvent) => {
     if (esRef.current.mode !== 'select') return;
     const screen = getScreenCoords(e);
-    const sectionNodes = getSectionNodes();
-    for (const node of sectionNodes) {
-      if (hitNodeScreen(screen.x, screen.y, node)) {
-        setEdgeEditor(null);
-        const c = canvasRef.current!;
-        const nodeScreen = contentToScreen(node.nx * c.width, node.ny * c.height);
-        setLabelEditor({
-          nodeId: node.id,
-          screenX: nodeScreen.x,
-          screenY: nodeScreen.y,
-          label: node.label,
-          isRoom: node.isRoom,
-          isConnector: node.isConnector,
-          category: node.category ?? '',
-        });
-        return;
-      }
-    }
+    tryOpenLabelEditorAt(screen.x, screen.y);
   };
 
   const handleMouseLeave = () => {
@@ -544,34 +587,13 @@ export function EditorCanvas({
     const last = lastTapRef.current;
     if (last && now - last.time < 300 && Math.hypot(sx - last.x, sy - last.y) < 20) {
       lastTapRef.current = null;
-      if (esRef.current.mode === 'select') {
-        const sectionNodes = getSectionNodes();
-        for (const node of sectionNodes) {
-          if (hitNodeScreen(sx, sy, node)) {
-            setEdgeEditor(null);
-            const c = canvasRef.current!;
-            const nodeScreen = contentToScreen(node.nx * c.width, node.ny * c.height);
-            setLabelEditor({
-              nodeId: node.id,
-              screenX: nodeScreen.x,
-              screenY: nodeScreen.y,
-              label: node.label,
-              isRoom: node.isRoom,
-              isConnector: node.isConnector,
-              category: node.category ?? '',
-            });
-            return;
-          }
-        }
-      }
+      if (esRef.current.mode === 'select') tryOpenLabelEditorAt(sx, sy);
       return;
     }
     lastTapRef.current = { time: now, x: sx, y: sy };
 
     // Synthesize a mouse-down equivalent using screen coords
     const { x, y } = screenToCanvas(sx, sy, zoomPanRef.current);
-    const W = canvas.width;
-    const H = contentHRef.current;
     const es = esRef.current;
     const sectionNodes = getSectionNodes();
 
@@ -585,97 +607,28 @@ export function EditorCanvas({
           return;
         }
       }
-      const sectionEdges = getSectionEdges(sectionNodes);
-      const nodeIndex = new Map(buildingRef.current.nodes.map((n) => [n.id, n]));
-      for (const edge of sectionEdges) {
-        const src = nodeIndex.get(edge.srcId)!;
-        const tgt = nodeIndex.get(edge.tgtId)!;
-        const { x: ex, y: ey } = contentToScreen(src.nx * W, src.ny * H);
-        const { x: tx, y: ty } = contentToScreen(tgt.nx * W, tgt.ny * H);
-        if (distanceToSegment(sx, sy, ex, ey, tx, ty) < 6) {
-          onEditorStateChange({ selectedEdgeId: edge.id, selectedNodeId: null });
-          setEdgeEditor({ edgeId: edge.id, screenX: (ex + tx) / 2, screenY: (ey + ty) / 2 });
-          return;
-        }
-      }
-      onEditorStateChange({ selectedNodeId: null, selectedEdgeId: null });
+      trySelectEdgeAt(sx, sy);
     }
 
     if (es.mode === 'node') {
       for (const node of sectionNodes) {
         if (hitNodeScreen(sx, sy, node)) return;
       }
-      if (!activeSectionIdRef.current) return;
-      const norm = px2norm(x, y, W, H);
-      const clamped = { x: Math.max(0, Math.min(1, norm.x)), y: Math.max(0, Math.min(1, norm.y)) };
-      const sectionEdges = getSectionEdges(sectionNodes);
-      const edgeNodeIndex = new Map(buildingRef.current.nodes.map((n) => [n.id, n]));
-      for (const edge of sectionEdges) {
-        const edgeSrc = edgeNodeIndex.get(edge.srcId)!;
-        const edgeTgt = edgeNodeIndex.get(edge.tgtId)!;
-        const { x: ex, y: ey } = contentToScreen(edgeSrc.nx * W, edgeSrc.ny * H);
-        const { x: tx, y: ty } = contentToScreen(edgeTgt.nx * W, edgeTgt.ny * H);
-        if (distanceToSegment(sx, sy, ex, ey, tx, ty) < 8) {
-          dispatch({ type: 'SPLIT_EDGE', payload: { edgeId: edge.id, nx: clamped.x, ny: clamped.y }, canvasW: W, canvasH: H });
-          return;
-        }
-      }
-      dispatch({
-        type: 'ADD_NODE',
-        payload: { sectionId: activeSectionIdRef.current, nx: clamped.x, ny: clamped.y, label: '', isRoom: false, isConnector: false },
-      });
+      placeOrSplitNodeAt(sx, sy);
     }
 
     if (es.mode === 'edge') {
-      const nodeIndex = new Map(buildingRef.current.nodes.map((n) => [n.id, n]));
-      for (const node of sectionNodes) {
-        if (hitNodeScreen(sx, sy, node)) {
-          if (!es.pendingEdgeSrcId) { onEditorStateChange({ pendingEdgeSrcId: node.id }); return; }
-          if (es.pendingEdgeSrcId === node.id) { onEditorStateChange({ pendingEdgeSrcId: null }); return; }
-          const srcNode = nodeIndex.get(es.pendingEdgeSrcId);
-          if (!srcNode) return;
-          const type = es.currentEdgeType;
-          const typeDef = buildingRef.current.edgeTypes.find((t) => t.id === type);
-          const activeSection = buildingRef.current.sections.find((s) => s.id === activeSectionIdRef.current);
-          const imgW = activeSection?.imageW ?? W;
-          const imgH = activeSection?.imageH ?? H;
-          const sectionScale = activeSection?.scale ?? 1.0;
-          const weight = typeDef ? computeEdgeWeight(typeDef, srcNode, node, imgW, imgH, sectionScale) : euclideanWeight(srcNode, node, imgW, imgH) * sectionScale;
-          dispatch({ type: 'ADD_EDGE', payload: { srcId: es.pendingEdgeSrcId, tgtId: node.id, type, weight, crossSection: false } });
-          onEditorStateChange({ pendingEdgeSrcId: null });
-          return;
-        }
-      }
+      if (tryHandleEdgeModeTap(sx, sy)) return;
       if (es.pendingEdgeSrcId) onEditorStateChange({ pendingEdgeSrcId: null });
     }
 
     if (es.mode === 'link' && es.pendingLinkSrc) {
-      for (const node of sectionNodes) {
-        if (hitNodeScreen(sx, sy, node)) {
-          if (!node.isConnector) return;
-          const type = es.currentEdgeType;
-          const typeDef = buildingRef.current.edgeTypes.find((t) => t.id === type);
-          const weight = typeDef?.weightMode === 'fixed' ? typeDef.fixedWeight : 100;
-          dispatch({ type: 'ADD_EDGE', payload: { srcId: es.pendingLinkSrc.nodeId, tgtId: node.id, type, weight, crossSection: true } });
-          onEditorStateChange({ mode: 'select', pendingLinkSrc: null });
-          return;
-        }
+      if (!tryHandleLinkModeTap(sx, sy)) {
+        onEditorStateChange({ mode: 'select', pendingLinkSrc: null });
       }
-      onEditorStateChange({ mode: 'select', pendingLinkSrc: null });
     }
 
-    if (es.mode === 'calibrate' && !calibratePopup) {
-      const norm = px2norm(x, y, W, H);
-      const clampedNx = Math.max(0, Math.min(1, norm.x));
-      const clampedNy = Math.max(0, Math.min(1, norm.y));
-      if (!es.calibrateA) {
-        onEditorStateChange({ calibrateA: { nx: clampedNx, ny: clampedNy } });
-      } else {
-        const b = { nx: clampedNx, ny: clampedNy };
-        onEditorStateChange({ calibrateB: b, mousePos: null });
-        setCalibratePopup({ a: es.calibrateA, b, distance: '' });
-      }
-    }
+    handleCalibrateTap(x, y);
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
