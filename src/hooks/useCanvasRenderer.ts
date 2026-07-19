@@ -20,6 +20,7 @@ export function buildEdgeLookups(edgeTypes: EdgeTypeDef[]) {
 
 const PATH_COLOR = '#EF9F27';
 const DIM_ALPHA = 0.15;
+const NODE_DIM_ALPHA = 0.5;
 
 // ---------------------------------------------------------------------------
 // Hook
@@ -317,7 +318,7 @@ export function useCanvasRenderer(
       ctx.stroke();
 
       // Node label
-      if (node.label && (!isPathMode || isPath)) {
+      if (node.label) {
         ctx.font = '12px system-ui, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
@@ -335,6 +336,13 @@ export function useCanvasRenderer(
     if (isPathMode) {
       const isSignificantNode = (n: typeof sectionNodes[number]) =>
         n.isRoom || n.isConnector || n.label !== '';
+      // Off-path connectors stay hidden — only rooms/labeled nodes are shown dimmed
+      const isDimEligible = (n: typeof sectionNodes[number]) =>
+        !n.isConnector && (n.isRoom || n.label !== '');
+      ctx.globalAlpha = NODE_DIM_ALPHA;
+      for (const node of sectionNodes) {
+        if (!pathNodeSet!.has(node.id) && isDimEligible(node)) drawNode(node, false);
+      }
       ctx.globalAlpha = 1;
       for (const node of sectionNodes) {
         if (pathNodeSet!.has(node.id) && isSignificantNode(node)) drawNode(node, true);
