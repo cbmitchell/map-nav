@@ -347,6 +347,10 @@ export function useGraphReducer() {
   const undoStack = useRef<Building[]>([]);
   const stateRef = useRef(state);
   const prevSectionIdsRef = useRef<Set<string>>(new Set());
+  // Tracks the imageData string last written to IndexedDB per section, so the
+  // persistence effect (which reruns on every dispatch) only re-saves images
+  // that actually changed instead of rewriting every section's image on every edit.
+  const savedImageDataRef = useRef<Map<string, string>>(new Map());
   useLayoutEffect(() => { stateRef.current = state; });
 
   // Stable dispatch wrapper that snapshots state before each mutation.
@@ -382,9 +386,11 @@ export function useGraphReducer() {
       }
     }
 
-    // Persist images to IndexedDB (fire-and-forget)
+    // Persist images to IndexedDB (fire-and-forget), skipping sections whose
+    // imageData hasn't changed since the last save
     for (const section of state.sections) {
-      if (section.imageData) {
+      if (section.imageData && savedImageDataRef.current.get(section.id) !== section.imageData) {
+        savedImageDataRef.current.set(section.id, section.imageData);
         saveImage(section.id, section.imageData).catch(console.error);
       }
     }
@@ -392,7 +398,10 @@ export function useGraphReducer() {
     // Purge images for sections that have been removed
     const currentIds = new Set(state.sections.map((s) => s.id));
     for (const prevId of prevSectionIdsRef.current) {
-      if (!currentIds.has(prevId)) deleteImage(prevId).catch(console.error);
+      if (!currentIds.has(prevId)) {
+        deleteImage(prevId).catch(console.error);
+        savedImageDataRef.current.delete(prevId);
+      }
     }
     prevSectionIdsRef.current = currentIds;
   }, [state]);
@@ -412,6 +421,12 @@ export function useGraphReducer() {
 
         const images = await getAllImages();
         if (images.size === 0) return;
+
+        // These images are already in IndexedDB — record them as saved so the
+        // persistence effect doesn't immediately write them straight back.
+        for (const [id, imageData] of images) {
+          savedImageDataRef.current.set(id, imageData);
+        }
 
         baseDispatch({
           type: 'LOAD_BUILDING',
