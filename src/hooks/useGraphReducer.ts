@@ -338,7 +338,16 @@ function reducer(state: Building, action: Action): Building {
 // Hook
 // ---------------------------------------------------------------------------
 
-const MAX_UNDO = 20;
+// Undo snapshots hold direct references to the previous Building object, not deep
+// clones — an unrelated edit (moving a node, renaming something) doesn't touch
+// `sections`, so its snapshot shares the exact same Section objects/imageData strings
+// as its neighbors rather than duplicating them. The one case that isn't free is
+// replacing the same section's image multiple times in a row: each replacement is a
+// genuinely distinct large base64 string that undo must keep around to be able to
+// revert to it. MAX_UNDO is kept modest (rather than a larger/unbounded history) so
+// that worst case — repeatedly swapping one section's map image — is capped at 10
+// retained images instead of growing without limit.
+const MAX_UNDO = 10;
 
 export function useGraphReducer() {
   const [state, baseDispatch] = useReducer(reducer, undefined, loadFromStorage);
