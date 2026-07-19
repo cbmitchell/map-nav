@@ -49,6 +49,10 @@ export function NavigatorCanvas({
   const isSmall = isMobile || isTablet;
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Content height (image-aspect-ratio height), distinct from canvas.height which on
+  // mobile/tablet can be taller so zoomed content isn't clipped. Node positions are
+  // drawn against this, not the raw canvas element height — see useCanvasRenderer.
+  const contentHRef = useRef(0);
   const panRef = useRef<{ lastX: number; lastY: number } | null>(null);
   const hasPannedRef = useRef(false);
   const spaceRef = useRef(false);
@@ -97,6 +101,7 @@ export function NavigatorCanvas({
         (s) => s.id === activeSectionIdRef.current,
       );
       const imageAspectH = section?.imageW ? Math.round((w * section.imageH) / section.imageW) : w;
+      contentHRef.current = imageAspectH;
       const h = isSmall
         ? Math.max(container.clientHeight, imageAspectH)
         : imageAspectH;
@@ -174,7 +179,7 @@ export function NavigatorCanvas({
     for (const node of sectionNodes) {
       // node normalized coords → canvas pixel coords → screen coords
       const nodeCanvasX = node.nx * canvas.width;
-      const nodeCanvasY = node.ny * canvas.height;
+      const nodeCanvasY = node.ny * contentHRef.current;
       const nodeScreenX = nodeCanvasX * zoomPanRef.current.scale + zoomPanRef.current.panX;
       const nodeScreenY = nodeCanvasY * zoomPanRef.current.scale + zoomPanRef.current.panY;
       const dist = Math.hypot(sx - nodeScreenX, sy - nodeScreenY);
