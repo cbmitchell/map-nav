@@ -4,6 +4,8 @@ import type { Building } from '../../types/graph';
 import { useMobile } from '../../hooks/useMobile';
 import { DirectionsPanel } from './DirectionsPanel';
 import { CollapsibleSection } from '../shared/CollapsibleSection';
+import { SearchableSelect } from '../shared/SearchableSelect';
+import type { SearchableSelectOption } from '../shared/SearchableSelect';
 import styles from './NavigatorControls.module.css';
 
 type PickMode = 'src' | 'tgt' | null;
@@ -70,18 +72,12 @@ export function NavigatorControls({
     rooms.filter((n) => n.category).map((n) => n.category as string),
   )].sort();
 
-  const renderRoomOptions = (excludeId: string | null) =>
-    [...grouped.entries()].map(([sectionId, { sectionName, nodes }]) => (
-      <optgroup key={sectionId} label={sectionName}>
-        {nodes
-          .filter((n) => n.id !== excludeId)
-          .map((n) => (
-            <option key={n.id} value={n.id}>
-              {n.label || '(unlabeled)'}
-            </option>
-          ))}
-      </optgroup>
-    ));
+  const roomSelectOptions = (excludeId: string | null): SearchableSelectOption[] =>
+    [...grouped.values()].flatMap(({ sectionName, nodes }) =>
+      nodes
+        .filter((n) => n.id !== excludeId)
+        .map((n) => ({ id: n.id, label: n.label || '(unlabeled)', groupLabel: sectionName })),
+    );
 
   const noRooms = rooms.length === 0;
 
@@ -118,15 +114,13 @@ export function NavigatorControls({
               {pickMode === 'src' ? 'Picking…' : 'Pick'}
             </button>
           </div>
-          <select
-            className={styles.select}
-            value={srcId ?? ''}
+          <SearchableSelect
+            options={roomSelectOptions(destMode === 'room' ? tgtId : null)}
+            value={srcId}
+            onChange={onSrcChange}
+            placeholder="— select origin —"
             disabled={noRooms}
-            onChange={(e) => onSrcChange(e.target.value || null)}
-          >
-            <option value="">— select origin —</option>
-            {renderRoomOptions(destMode === 'room' ? tgtId : null)}
-          </select>
+          />
         </div>
 
         <div className={styles.fieldBlock}>
@@ -159,15 +153,13 @@ export function NavigatorControls({
           </div>
 
           {destMode === 'room' ? (
-            <select
-              className={styles.select}
-              value={tgtId ?? ''}
+            <SearchableSelect
+              options={roomSelectOptions(srcId)}
+              value={tgtId}
+              onChange={onTgtChange}
+              placeholder="— select destination —"
               disabled={noRooms}
-              onChange={(e) => onTgtChange(e.target.value || null)}
-            >
-              <option value="">— select destination —</option>
-              {renderRoomOptions(srcId)}
-            </select>
+            />
           ) : (
             <>
               <select

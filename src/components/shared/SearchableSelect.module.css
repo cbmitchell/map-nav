@@ -1,0 +1,119 @@
+.container {
+  position: relative;
+  width: 100%;
+}
+
+.inputRow {
+  position: relative;
+}
+
+.input {
+  width: 100%;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  color: #ddd;
+  padding: 8px;
+  padding-right: 26px;
+  font-size: 14px;
+  outline: none;
+  min-height: 40px;
+  box-sizing: border-box;
+}
+
+.input:focus {
+  border-color: var(--border-active);
+}
+
+.input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.clearBtn {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--text-ghost);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 4px;
+}
+
+.clearBtn:hover {
+  color: var(--text-bright);
+}
+
+.listbox {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  background: var(--bg-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  max-height: 260px;
+  overflow-y: auto;
+  z-index: 20;
+  padding: 4px 0;
+  list-style: none;
+  margin: 0;
+}
+
+.group {
+  list-style: none;
+}
+
+.groupLabel {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-ghost);
+  padding: 6px 10px 2px;
+}
+
+.groupList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.option {
+  padding: 7px 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.optionHighlighted {
+  background: var(--bg-overlay);
+  color: var(--text-bright);
+}
+
+.emptyMessage {
+  padding: 10px;
+  font-size: 12px;
+  color: var(--text-ghost);
+  font-style: italic;
+  list-style: none;
+}
+
+@media (max-width: 1024px) {
+  .input {
+    font-size: 16px;
+  }
+
+  .option {
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+}
