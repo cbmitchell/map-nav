@@ -109,20 +109,17 @@ export function Editor({ state, dispatch, undo, storageError }: EditorProps) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []); // empty — all mutable values accessed via refs or stable setters
 
-  // Reset currentEdgeType to 'walkway' if the active type was deleted
-  useEffect(() => {
-    const typeIds = state.edgeTypes.map((t) => t.id);
-    if (!typeIds.includes(editorState.currentEdgeType)) {
-      setEditorState((prev) => ({ ...prev, currentEdgeType: 'walkway' }));
-    }
-  }, [state.edgeTypes, editorState.currentEdgeType]);
-
-  // Fall back to the first available section if the preferred one was deleted
-  useEffect(() => {
-    if (preferredSectionId && !state.sections.some((s) => s.id === preferredSectionId)) {
-      setActiveSectionId(null);
-    }
-  }, [state.sections, preferredSectionId]);
+  // Reset currentEdgeType to 'walkway' if the active type was deleted, and fall back to
+  // the first available section if the preferred one was deleted. Both are adjustments
+  // to state in response to a state change (deletion), not synchronization with an
+  // external system, so they're done directly during render rather than in an effect —
+  // see https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
+  if (!state.edgeTypes.some((t) => t.id === editorState.currentEdgeType)) {
+    setEditorState((prev) => ({ ...prev, currentEdgeType: 'walkway' }));
+  }
+  if (preferredSectionId && !state.sections.some((s) => s.id === preferredSectionId)) {
+    setActiveSectionId(null);
+  }
 
   const handleSectionChange = useCallback(
     (newId: string) => {

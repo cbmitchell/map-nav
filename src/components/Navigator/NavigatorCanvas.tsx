@@ -14,6 +14,10 @@ interface NodeMenuState {
   label: string;
   screenX: number;
   screenY: number;
+  // Canvas width captured at click time, for clamping the menu's horizontal position.
+  // Captured here rather than read from canvasRef during render (see useCanvasRenderer.ts
+  // and hitTestRoomNode) so the value can't go stale relative to what's on screen.
+  canvasW: number;
 }
 
 interface NavigatorCanvasProps {
@@ -69,15 +73,26 @@ export function NavigatorCanvas({
     activeSectionIdRef.current = activeSectionId;
   });
 
-  // Screen-space menu position is meaningless after switching sections
-  useEffect(() => {
-    setNodeMenu(null);
-  }, [activeSectionId]);
-
-  // Entering explicit pick mode (via the sidebar "Pick" buttons) supersedes the click menu
-  useEffect(() => {
-    if (pickMode) setNodeMenu(null);
-  }, [pickMode]);
+  // Close the click/tap node menu when the active section changes (its screen-space
+  // position is meaningless after switching sections) or when explicit pick mode is
+  // turned on (which supersedes the click menu). Adjusting state during render — rather
+  // than in an effect, and tracked via useState rather than a ref so it stays pure —
+  // is React's recommended pattern for reacting to a prop/state change like this:
+  // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
+  const [prevMenuResetDeps, setPrevMenuResetDeps] = useState({ activeSectionId, pickMode });
+  if (
+    prevMenuResetDeps.activeSectionId !== activeSectionId ||
+    prevMenuResetDeps.pickMode !== pickMode
+  ) {
+    setPrevMenuResetDeps({ activeSectionId, pickMode });
+    if (
+      nodeMenu !== null &&
+      (prevMenuResetDeps.activeSectionId !== activeSectionId ||
+        (pickMode && !prevMenuResetDeps.pickMode))
+    ) {
+      setNodeMenu(null);
+    }
+  }
 
   const { redraw } = useCanvasRenderer(
     canvasRef,
@@ -214,7 +229,7 @@ export function NavigatorCanvas({
 
     // Not in pick mode — clicking a room node opens a menu to set it as origin/destination
     const hit = hitTestRoomNode(sx, sy);
-    setNodeMenu(hit ? { nodeId: hit.id, label: hit.label, screenX: sx, screenY: sy } : null);
+    setNodeMenu(hit ? { nodeId: hit.id, label: hit.label, screenX: sx, screenY: sy, canvasW: canvas.width } : null);
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -328,7 +343,6 @@ export function NavigatorCanvas({
 
   const section = building.sections.find((s) => s.id === activeSectionId);
   const hasImage = !!section?.imageData;
-  const canvasW = canvasRef.current?.width ?? 400;
 
   return (
     <div
@@ -361,7 +375,7 @@ export function NavigatorCanvas({
           <div
             className={isSmall ? styles.menuSheet : styles.menu}
             style={isSmall ? undefined : {
-              left: Math.min(nodeMenu.screenX + 8, canvasW - 160),
+              left: Math.min(nodeMenu.screenX + 8, nodeMenu.canvasW - 160),
               top: nodeMenu.screenY + 8,
             }}
           >

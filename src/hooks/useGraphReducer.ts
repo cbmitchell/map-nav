@@ -379,6 +379,9 @@ export function useGraphReducer() {
     };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(stripped));
+      // Reporting the result of synchronizing with localStorage (an external system)
+      // back into React state is exactly what this effect is for.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStorageError(false);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'QuotaExceededError') {
@@ -444,7 +447,7 @@ export function useGraphReducer() {
     }
 
     hydrateImages();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // runs once on mount — all mutable values accessed via refs
 
   return { state, dispatch, undo, storageError };
 }
