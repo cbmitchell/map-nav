@@ -248,7 +248,7 @@ export function NavigatorControls({
           <div className={styles.divider} />
           <CollapsibleSection title="Sections" storageKey="nav-sections">
             <div className={styles.sectionList}>
-              {building.sections.map((s) => (
+              {[...building.sections].sort((a, b) => a.name.localeCompare(b.name)).map((s) => (
                 <div
                   key={s.id}
                   className={clsx(styles.sectionItem, s.id === activeSectionId && styles.sectionItemActive)}

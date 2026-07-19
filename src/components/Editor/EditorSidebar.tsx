@@ -409,7 +409,7 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
         </div>
       <CollapsibleSection title="Sections" storageKey="editor-sections">
         <div className={styles.sectionList}>
-          {building.sections.map((s) => (
+          {[...building.sections].sort((a, b) => a.name.localeCompare(b.name)).map((s) => (
             <div key={s.id}>
               <div
                 className={clsx(styles.sectionItem, s.id === activeSectionId && styles.sectionItemActive)}
