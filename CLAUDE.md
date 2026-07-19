@@ -51,7 +51,7 @@ src/
       AppShell.tsx           # top-level layout, mode toggle, owns useGraphReducer instance
       ErrorBoundary.tsx      # error boundary wrapper
   hooks/
-    useGraphReducer.ts       # useReducer for all graph state + localStorage sync
+    useGraphReducer.ts       # useReducer for all graph state + localStorage/IndexedDB sync
     usePathfinder.ts         # Dijkstra wrappers, accessibility filtering
     useCanvasRenderer.ts     # shared canvas draw logic (editor + navigator)
     useMobile.ts             # mobile detection hook
@@ -65,6 +65,7 @@ src/
     pathfinding.ts           # Dijkstra algorithm (pure function, no React)
     pdf.ts                   # PDF import utility
     id.ts                    # ID generation (generateId wrapping crypto.randomUUID)
+    imageStore.ts            # IndexedDB CRUD for section images (save/getAll/delete)
 ```
 
 ---
@@ -175,12 +176,31 @@ Action types:
 - `CALIBRATE_SECTION` — set `Section.scale` and recalculate all length-based edge weights for that section
 - `LOAD_BUILDING` — replace entire state (used for import)
 
-### localStorage sync
+### Persistence: localStorage + IndexedDB
 
-On every dispatch, serialize the full Building state to localStorage under the key
-`office-navigator-state`. On app initialization, attempt to rehydrate from localStorage
-before falling back to an empty Building. Images are stored as base64 strings — this is
-intentional and acceptable given the use case (see "Known limitations" below).
+Building state is split across two stores:
+- **localStorage** (`office-navigator-state`) holds the graph structure — sections,
+  nodes, edges, edge types, name — with each `Section.imageData` stripped to `''`
+  before writing. This keeps the JSON small and avoids hitting localStorage's
+  per-origin size quota.
+- **IndexedDB** (`office-navigator-db`, object store `section-images`, in
+  `src/utils/imageStore.ts`) holds the actual base64 `imageData` for each section,
+  keyed by section ID.
+
+The persistence effect in `useGraphReducer.ts` runs on every dispatch: it writes the
+stripped structure to localStorage, and re-saves to IndexedDB only the sections whose
+`imageData` changed since the last save (tracked via a ref) — not every section on
+every dispatch. Deleting a section also deletes its IndexedDB entry.
+
+On app initialization, structure is rehydrated from localStorage synchronously (with
+`imageData` empty), then a mount effect asynchronously loads images from IndexedDB and
+dispatches `LOAD_BUILDING` to merge them back in — so sections briefly render without
+their image on first paint. A one-time migration reads any legacy base64 `imageData`
+still embedded in an old localStorage payload and copies it into IndexedDB.
+
+The base64-in-JSON format itself is still used for **export/import** (see "Export /
+import format" below) — that's a separate, deliberate tradeoff from the localStorage
+storage format described here.
 
 ---
 
