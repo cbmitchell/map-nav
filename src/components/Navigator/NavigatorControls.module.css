@@ -244,6 +244,11 @@
   max-height: 50vh;
   overflow-y: auto;
   padding-top: 10px;
+  transition: max-height 0.15s ease;
+}
+
+.tabContent:focus-within {
+  max-height: 85vh;
 }
 
 @media (max-width: 1024px) {
