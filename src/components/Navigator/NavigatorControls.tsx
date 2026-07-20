@@ -27,6 +27,8 @@ interface NavigatorControlsProps {
   onSectionChange: (id: string) => void;
 }
 
+type TabId = 'route' | 'options' | 'directions' | 'sections';
+
 export function NavigatorControls({
   building,
   srcId,
@@ -46,7 +48,11 @@ export function NavigatorControls({
   onSectionChange,
 }: NavigatorControlsProps) {
   const [destMode, setDestMode] = useState<'room' | 'category'>('room');
-  const { isMobile } = useMobile();
+  const { isMobile, isTablet } = useMobile();
+  const isMobileOrTablet = isMobile || isTablet;
+
+  const [activeTab, setActiveTab] = useState<TabId>('route');
+  const [tabExpanded, setTabExpanded] = useState(true);
 
   const rooms = building.nodes.filter((n) => n.isRoom);
 
@@ -94,141 +100,200 @@ export function NavigatorControls({
     onExcludedTypesChange(next);
   };
 
+  const hasSections = building.sections.length > 0;
+
+  const routeContent = (
+    <>
+      <div className={styles.fieldBlock}>
+        <div className={styles.row}>
+          <label className={styles.label}>From</label>
+        </div>
+        <SearchableSelect
+          options={roomSelectOptions(destMode === 'room' ? tgtId : null)}
+          value={srcId}
+          onChange={onSrcChange}
+          placeholder="— select origin —"
+          disabled={noRooms}
+        />
+      </div>
+
+      <div className={styles.fieldBlock}>
+        <div className={styles.row}>
+          <label className={styles.label}>To</label>
+          <div className={styles.modeToggle}>
+            <button
+              className={clsx(styles.modeBtn, destMode === 'room' && styles.modeBtnActive)}
+              onClick={() => handleDestModeChange('room')}
+            >
+              Room
+            </button>
+            <button
+              className={clsx(styles.modeBtn, destMode === 'category' && styles.modeBtnActive)}
+              disabled={knownCategories.length === 0}
+              onClick={() => handleDestModeChange('category')}
+            >
+              {isMobile ? 'Nearest' : 'Nearest in category'}
+            </button>
+          </div>
+        </div>
+
+        {destMode === 'room' ? (
+          <SearchableSelect
+            options={roomSelectOptions(srcId)}
+            value={tgtId}
+            onChange={onTgtChange}
+            placeholder="— select destination —"
+            disabled={noRooms}
+          />
+        ) : (
+          <>
+            <select
+              className={styles.select}
+              value={tgtCategory ?? ''}
+              disabled={knownCategories.length === 0}
+              onChange={(e) => onTgtCategoryChange(e.target.value || null)}
+            >
+              <option value="">— select category —</option>
+              {knownCategories.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+            {tgtCategory && resolvedTgtLabel && (
+              <div className={styles.resolvedLabel}>
+                Routing to: {resolvedTgtLabel}
+              </div>
+            )}
+            {tgtCategory && !resolvedTgtLabel && (
+              <div className={styles.resolvedLabelMissing}>
+                No reachable room in this category
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {noRooms && (
+        <div className={styles.hint}>
+          Mark nodes as rooms in the Editor to enable navigation.
+        </div>
+      )}
+
+      {error && <div className={styles.error}>{error}</div>}
+    </>
+  );
+
+  const routeOptionsContent = (
+    <div className={styles.typeList}>
+      {building.edgeTypes.map((et) => {
+        const included = !excludedTypes.has(et.id);
+        return (
+          <label key={et.id} className={styles.typeRow}>
+            <input
+              type="checkbox"
+              checked={included}
+              onChange={(e) => toggleExcludedType(et.id, e.target.checked)}
+            />
+            <span className={styles.typeSwatch} style={{ background: et.color }} />
+            <span className={styles.typeName}>{et.name}</span>
+          </label>
+        );
+      })}
+    </div>
+  );
+
+  const directionsContent = (
+    <div className={styles.directionBody}>
+      <label className={styles.toggle}>
+        <input
+          type="checkbox"
+          checked={showDirections}
+          onChange={(e) => onDirectionsToggle(e.target.checked)}
+        />
+        <span>Show directions</span>
+      </label>
+      {showDirections && path && path.length > 0 && (
+        <DirectionsPanel building={building} path={path} />
+      )}
+    </div>
+  );
+
+  const sectionsContent = (
+    <div className={styles.sectionList}>
+      {[...building.sections].sort((a, b) => a.name.localeCompare(b.name)).map((s) => (
+        <div
+          key={s.id}
+          className={clsx(styles.sectionItem, s.id === activeSectionId && styles.sectionItemActive)}
+          onClick={() => onSectionChange(s.id)}
+        >
+          <span className={styles.sectionName}>{s.name}</span>
+          <span className={styles.sectionFloor}>F{s.floor}</span>
+        </div>
+      ))}
+    </div>
+  );
+
+  if (isMobileOrTablet) {
+    const tabs: { id: TabId; label: string; content: React.ReactNode }[] = [
+      { id: 'route', label: 'Route', content: routeContent },
+      { id: 'options', label: 'Options', content: routeOptionsContent },
+      { id: 'directions', label: 'Directions', content: directionsContent },
+      ...(hasSections ? [{ id: 'sections' as const, label: 'Sections', content: sectionsContent }] : []),
+    ];
+    const active = tabs.find((t) => t.id === activeTab) ?? tabs[0];
+
+    const handleTabClick = (id: TabId) => {
+      if (id === activeTab) {
+        setTabExpanded((prev) => !prev);
+      } else {
+        setActiveTab(id);
+        setTabExpanded(true);
+      }
+    };
+
+    return (
+      <div className={styles.controls}>
+        <div className={styles.tabBar}>
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              className={clsx(styles.tab, t.id === activeTab && styles.tabActive)}
+              onClick={() => handleTabClick(t.id)}
+            >
+              {t.label}
+              {t.id === activeTab && (
+                <span className={clsx(styles.tabChevron, tabExpanded && styles.tabChevronOpen)} />
+              )}
+            </button>
+          ))}
+        </div>
+        {tabExpanded && <div className={styles.tabContent}>{active.content}</div>}
+      </div>
+    );
+  }
+
   return (
     <div className={styles.controls}>
       <CollapsibleSection title="Route" storageKey="nav-route">
-        <div className={styles.fieldBlock}>
-          <div className={styles.row}>
-            <label className={styles.label}>From</label>
-          </div>
-          <SearchableSelect
-            options={roomSelectOptions(destMode === 'room' ? tgtId : null)}
-            value={srcId}
-            onChange={onSrcChange}
-            placeholder="— select origin —"
-            disabled={noRooms}
-          />
-        </div>
-
-        <div className={styles.fieldBlock}>
-          <div className={styles.row}>
-            <label className={styles.label}>To</label>
-            <div className={styles.modeToggle}>
-              <button
-                className={clsx(styles.modeBtn, destMode === 'room' && styles.modeBtnActive)}
-                onClick={() => handleDestModeChange('room')}
-              >
-                Room
-              </button>
-              <button
-                className={clsx(styles.modeBtn, destMode === 'category' && styles.modeBtnActive)}
-                disabled={knownCategories.length === 0}
-                onClick={() => handleDestModeChange('category')}
-              >
-                {isMobile ? 'Nearest' : 'Nearest in category'}
-              </button>
-            </div>
-          </div>
-
-          {destMode === 'room' ? (
-            <SearchableSelect
-              options={roomSelectOptions(srcId)}
-              value={tgtId}
-              onChange={onTgtChange}
-              placeholder="— select destination —"
-              disabled={noRooms}
-            />
-          ) : (
-            <>
-              <select
-                className={styles.select}
-                value={tgtCategory ?? ''}
-                disabled={knownCategories.length === 0}
-                onChange={(e) => onTgtCategoryChange(e.target.value || null)}
-              >
-                <option value="">— select category —</option>
-                {knownCategories.map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-              {tgtCategory && resolvedTgtLabel && (
-                <div className={styles.resolvedLabel}>
-                  Routing to: {resolvedTgtLabel}
-                </div>
-              )}
-              {tgtCategory && !resolvedTgtLabel && (
-                <div className={styles.resolvedLabelMissing}>
-                  No reachable room in this category
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        {noRooms && (
-          <div className={styles.hint}>
-            Mark nodes as rooms in the Editor to enable navigation.
-          </div>
-        )}
-
-        {error && <div className={styles.error}>{error}</div>}
+        {routeContent}
       </CollapsibleSection>
 
       <div className={styles.divider} />
 
       <CollapsibleSection title="Route options" storageKey="nav-route-options">
-        <div className={styles.typeList}>
-          {building.edgeTypes.map((et) => {
-            const included = !excludedTypes.has(et.id);
-            return (
-              <label key={et.id} className={styles.typeRow}>
-                <input
-                  type="checkbox"
-                  checked={included}
-                  onChange={(e) => toggleExcludedType(et.id, e.target.checked)}
-                />
-                <span className={styles.typeSwatch} style={{ background: et.color }} />
-                <span className={styles.typeName}>{et.name}</span>
-              </label>
-            );
-          })}
-        </div>
+        {routeOptionsContent}
       </CollapsibleSection>
 
       <div className={styles.divider} />
 
       <CollapsibleSection title="Directions" storageKey="nav-directions">
-        <div className={styles.directionBody}>
-          <label className={styles.toggle}>
-            <input
-              type="checkbox"
-              checked={showDirections}
-              onChange={(e) => onDirectionsToggle(e.target.checked)}
-            />
-            <span>Show directions</span>
-          </label>
-          {showDirections && path && path.length > 0 && (
-            <DirectionsPanel building={building} path={path} />
-          )}
-        </div>
+        {directionsContent}
       </CollapsibleSection>
 
-      {building.sections.length > 0 && (
+      {hasSections && (
         <>
           <div className={styles.divider} />
           <CollapsibleSection title="Sections" storageKey="nav-sections">
-            <div className={styles.sectionList}>
-              {[...building.sections].sort((a, b) => a.name.localeCompare(b.name)).map((s) => (
-                <div
-                  key={s.id}
-                  className={clsx(styles.sectionItem, s.id === activeSectionId && styles.sectionItemActive)}
-                  onClick={() => onSectionChange(s.id)}
-                >
-                  <span className={styles.sectionName}>{s.name}</span>
-                  <span className={styles.sectionFloor}>F{s.floor}</span>
-                </div>
-              ))}
-            </div>
+            {sectionsContent}
           </CollapsibleSection>
         </>
       )}

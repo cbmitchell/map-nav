@@ -263,6 +263,19 @@ The user's current section view updates automatically to show the origin node's 
 Rooms can also be picked directly on the map: clicking a room node opens a small context
 menu at the click point with "Set origin" / "Set destination" options (`NavigatorCanvas.tsx`).
 
+### Responsive layout
+
+`NavigatorControls` (`src/components/Navigator/NavigatorControls.tsx`) renders
+differently depending on viewport:
+
+- **Desktop (>1024px):** a left sidebar containing four `CollapsibleSection` accordions —
+  Route, Route options, Directions, Sections — any number of which can be open at once.
+- **Mobile/tablet (≤1024px, `isMobile || isTablet`):** a collapsible tab bar along the top
+  of the screen (above the map) with the same four groups as tabs. Only one tab's content
+  is shown at a time; tapping the active tab again collapses it down to just the strip to
+  maximize map space, tapping a different tab switches to it and expands. The "Sections"
+  tab is omitted when the building has no sections yet, matching the desktop sidebar.
+
 ### Pathfinding
 
 Dijkstra's algorithm over the full graph (all sections, all nodes). Before running:

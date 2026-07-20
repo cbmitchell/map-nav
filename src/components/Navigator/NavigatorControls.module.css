@@ -195,8 +195,63 @@
   margin-left: 6px;
 }
 
+.tabBar {
+  display: flex;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 12px 6px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  cursor: pointer;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tabActive {
+  color: var(--text-bright);
+  border-bottom-color: var(--accent-blue);
+}
+
+.tabChevron {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.tabChevronOpen {
+  transform: rotate(180deg);
+}
+
+.tabContent {
+  max-height: 50vh;
+  overflow-y: auto;
+  padding-top: 10px;
+}
+
 @media (max-width: 1024px) {
   .controls {
-    width: 240px;
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+    overflow-y: visible;
+    flex-shrink: 0;
   }
 }
