@@ -149,6 +149,7 @@ export function Navigator({ state }: NavigatorProps) {
             onWheel={handleWheel}
             onPan={pan}
             onZoomAt={zoomAt}
+            onAutoFit={setView}
             onSetOrigin={handleSrcChange}
             onSetDestination={handleTgtChange}
           />

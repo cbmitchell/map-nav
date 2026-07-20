@@ -1,11 +1,13 @@
 import { useRef, useState, useLayoutEffect, useEffect } from 'react';
 import type { Building } from '../../types/graph';
 import type { ZoomPanState } from '../../hooks/useZoomPan';
+import { fitZoomPan } from '../../hooks/useZoomPan';
 import { useCanvasRenderer } from '../../hooks/useCanvasRenderer';
 import { useMobile } from '../../hooks/useMobile';
 import styles from './NavigatorCanvas.module.css';
 
 const HIT_RADIUS = 12;
+const PATH_FIT_PADDING = 60;
 
 interface NodeMenuState {
   nodeId: string;
@@ -26,6 +28,7 @@ interface NavigatorCanvasProps {
   onWheel: (e: WheelEvent, rect: DOMRect) => void;
   onPan: (dx: number, dy: number) => void;
   onZoomAt: (screenX: number, screenY: number, newScale: number) => void;
+  onAutoFit: (state: ZoomPanState) => void;
   onSetOrigin: (nodeId: string) => void;
   onSetDestination: (nodeId: string) => void;
 }
@@ -38,6 +41,7 @@ export function NavigatorCanvas({
   onWheel,
   onPan,
   onZoomAt,
+  onAutoFit,
   onSetOrigin,
   onSetDestination,
 }: NavigatorCanvasProps) {
@@ -114,6 +118,39 @@ export function NavigatorCanvas({
     observer.observe(container);
     return () => observer.disconnect();
   }, [activeSectionId, building.sections, redraw, isSmall]);
+
+  // Auto-fit the view to the selected path's nodes in the currently displayed section.
+  // Re-runs whenever the path or the active section changes (including stepping through
+  // a multi-section path), overriding whatever zoom/pan was there before.
+  useLayoutEffect(() => {
+    if (!path) return;
+    const container = containerRef.current;
+    const canvas = canvasRef.current;
+    if (!container || !canvas) return;
+
+    const pathNodeSet = new Set(path);
+    const pathNodesInSection = buildingRef.current.nodes.filter(
+      (n) => n.sectionId === activeSectionIdRef.current && pathNodeSet.has(n.id),
+    );
+    if (pathNodesInSection.length === 0) return;
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const node of pathNodesInSection) {
+      const x = node.nx * canvas.width;
+      const y = node.ny * contentHRef.current;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+
+    onAutoFit(fitZoomPan(
+      { minX, minY, maxX, maxY },
+      container.clientWidth,
+      container.clientHeight,
+      PATH_FIT_PADDING,
+    ));
+  }, [path, activeSectionId, onAutoFit]);
 
   // Wheel zoom (non-passive)
   useEffect(() => {

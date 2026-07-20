@@ -26,6 +26,28 @@ export function screenToCanvas(
   return { x: (sx - panX) / scale, y: (sy - panY) / scale };
 }
 
+// Compute a ZoomPanState that fits a content-space bounding box within a container of
+// size containerW x containerH, leaving at least `padding` screen px on all four sides.
+export function fitZoomPan(
+  bounds: { minX: number; minY: number; maxX: number; maxY: number },
+  containerW: number,
+  containerH: number,
+  padding: number,
+): ZoomPanState {
+  const bboxW = Math.max(bounds.maxX - bounds.minX, 1);
+  const bboxH = Math.max(bounds.maxY - bounds.minY, 1);
+  const scaleX = (containerW - padding * 2) / bboxW;
+  const scaleY = (containerH - padding * 2) / bboxH;
+  const scale = clampScale(Math.min(scaleX, scaleY));
+  const centerX = (bounds.minX + bounds.maxX) / 2;
+  const centerY = (bounds.minY + bounds.maxY) / 2;
+  return {
+    scale,
+    panX: containerW / 2 - centerX * scale,
+    panY: containerH / 2 - centerY * scale,
+  };
+}
+
 export function useZoomPan() {
   const [zoomPan, setZoomPan] = useState<ZoomPanState>(DEFAULT_ZOOM_PAN);
 

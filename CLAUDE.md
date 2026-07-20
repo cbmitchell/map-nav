@@ -295,6 +295,14 @@ The pathfinder is a pure function in `src/utils/pathfinding.ts` — no React dep
 3. **Directions panel** (toggleable) — ordered list of waypoints extracted from the
    path: only nodes with labels or `isConnector === true` are included; unlabeled
    walkway nodes are silently skipped
+4. **Auto-fit zoom** — the view automatically zooms/pans to frame the bounding box of the
+   path's nodes within the currently displayed section, leaving a fixed screen-pixel
+   padding on all sides (`PATH_FIT_PADDING` in `NavigatorCanvas.tsx`, via
+   `fitZoomPan()` in `src/hooks/useZoomPan.ts`). Re-fits every time the displayed section
+   changes while a path is active (stepping through a multi-section path, switching
+   sections, or picking a new origin) — this takes priority over the per-section
+   "remember my last manual zoom" cache, which still governs plain browsing when no path
+   is selected. Manual zoom/pan while staying on the same path/section is left alone.
 
 ---
 
