@@ -506,6 +506,9 @@ export function EditorCanvas({
         if (hitNodeScreen(screen.x, screen.y, node)) {
           if (pathModeActive && node.id === es.lastPathNodeId) {
             onEditorStateChange({ lastPathNodeId: null, mousePos: null });
+          } else if (pathModeActive) {
+            // Clicking a different existing node re-anchors the chain to it
+            onEditorStateChange({ lastPathNodeId: node.id, mousePos: null });
           }
           return;
         }
@@ -682,6 +685,9 @@ export function EditorCanvas({
         if (hitNodeScreen(sx, sy, node)) {
           if (pathModeActive && node.id === es.lastPathNodeId) {
             onEditorStateChange({ lastPathNodeId: null, mousePos: null });
+          } else if (pathModeActive) {
+            // Tapping a different existing node re-anchors the chain to it
+            onEditorStateChange({ lastPathNodeId: node.id, mousePos: null });
           }
           return;
         }

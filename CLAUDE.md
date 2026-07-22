@@ -241,10 +241,11 @@ functionally inert on mobile/tablet — `isMobile || isTablet`):
 - **Automatically create edges** — each click places a node connected by an edge (same
   type as `currentEdgeType`) to the previously-placed node, continuing a chain across
   clicks (`EditorState.lastPathNodeId` tracks the chain's current end). Clicking the
-  chain's last node again cancels the chain; so does pressing Escape (which also exits to
-  `select` mode) or switching tools. Turning this off also turns off "Snap to axis".
-  Clicking near an existing edge still splits it as normal — the split-in node becomes
-  the chain's new last node.
+  chain's last node again cancels the chain; clicking any *other* existing node
+  re-anchors the chain to it instead (the next new node connects from there); pressing
+  Escape (which also exits to `select` mode) or switching tools cancels the chain
+  entirely. Turning this off also turns off "Snap to axis". Clicking near an existing
+  edge still splits it as normal — the split-in node becomes the chain's new last node.
 - **Snap to axis** (togglable only while the above is on) — forces each new node to align
   with the previous one on whichever axis (X or Y) needs the smaller correction, rather
   than landing exactly under the cursor.
