@@ -101,6 +101,22 @@
   border-color: #1D9E75;
 }
 
+.toggleLabel {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.toggleLabelDisabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .linkBanner {
   display: flex;
   align-items: center;

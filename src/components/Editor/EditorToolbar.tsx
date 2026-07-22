@@ -7,6 +7,7 @@ import type { Building, Section } from '../../types/graph';
 import type { EditorState, EditorMode } from '../../types/editor';
 import type { Action } from '../../hooks/useGraphReducer';
 import { exportBuilding, importBuilding } from '../../utils/export';
+import { useMobile } from '../../hooks/useMobile';
 import styles from './EditorToolbar.module.css';
 
 interface EditorToolbarProps {
@@ -40,9 +41,27 @@ export function EditorToolbar({
 }: EditorToolbarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const { isMobile, isTablet } = useMobile();
+  const isMobileOrTablet = isMobile || isTablet;
 
   const setMode = (mode: EditorMode) => {
-    onEditorStateChange({ mode, pendingEdgeSrcId: null, selectedNodeId: null, selectedEdgeId: null, calibrateA: null, calibrateB: null });
+    onEditorStateChange({
+      mode,
+      pendingEdgeSrcId: null,
+      selectedNodeId: null,
+      selectedEdgeId: null,
+      calibrateA: null,
+      calibrateB: null,
+      lastPathNodeId: null,
+    });
+  };
+
+  const handleAutoConnectToggle = (checked: boolean) => {
+    onEditorStateChange(
+      checked
+        ? { autoConnectEnabled: true }
+        : { autoConnectEnabled: false, snapToAxis: false, lastPathNodeId: null },
+    );
   };
 
   const handleUploadClick = () => fileInputRef.current?.click();
@@ -135,6 +154,29 @@ export function EditorToolbar({
           </span>
         )}
       </div>
+
+      {/* Node-path toggles — desktop only */}
+      {editorState.mode === 'node' && !isMobileOrTablet && (
+        <div className={styles.group}>
+          <label className={styles.toggleLabel}>
+            <input
+              type="checkbox"
+              checked={editorState.autoConnectEnabled}
+              onChange={(e) => handleAutoConnectToggle(e.target.checked)}
+            />
+            Automatically create edges
+          </label>
+          <label className={clsx(styles.toggleLabel, !editorState.autoConnectEnabled && styles.toggleLabelDisabled)}>
+            <input
+              type="checkbox"
+              checked={editorState.snapToAxis}
+              disabled={!editorState.autoConnectEnabled}
+              onChange={(e) => onEditorStateChange({ snapToAxis: e.target.checked })}
+            />
+            Snap to axis
+          </label>
+        </div>
+      )}
 
       <div className={styles.divider} />
 

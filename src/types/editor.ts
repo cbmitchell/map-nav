@@ -12,6 +12,9 @@ export interface EditorState {
   mousePos: { x: number; y: number } | null;
   calibrateA: { nx: number; ny: number } | null;
   calibrateB: { nx: number; ny: number } | null;
+  autoConnectEnabled: boolean;
+  snapToAxis: boolean;
+  lastPathNodeId: string | null;
 }
 
 export const DEFAULT_EDITOR_STATE: EditorState = {
@@ -24,4 +27,7 @@ export const DEFAULT_EDITOR_STATE: EditorState = {
   mousePos: null,
   calibrateA: null,
   calibrateB: null,
+  autoConnectEnabled: false,
+  snapToAxis: false,
+  lastPathNodeId: null,
 };

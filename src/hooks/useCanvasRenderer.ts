@@ -229,6 +229,36 @@ export function useCanvasRenderer(
       }
     }
 
+    // 4a. Node-path (auto-connect) preview — dim node + edge following the cursor
+    if (es.mode === 'node' && es.autoConnectEnabled && es.lastPathNodeId && es.mousePos) {
+      const prevNode = nodeIndex.get(es.lastPathNodeId);
+      if (prevNode) {
+        const prevScreen = toScreen(prevNode.nx * W, prevNode.ny * contentH);
+        const previewScreen = toScreen(es.mousePos.x, es.mousePos.y);
+
+        ctx.globalAlpha = NODE_DIM_ALPHA;
+
+        ctx.beginPath();
+        ctx.moveTo(prevScreen.x, prevScreen.y);
+        ctx.lineTo(previewScreen.x, previewScreen.y);
+        ctx.strokeStyle = edgeLookups.colors[es.currentEdgeType] ?? '#888';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.beginPath();
+        ctx.arc(previewScreen.x, previewScreen.y, 8, 0, Math.PI * 2);
+        ctx.fillStyle = '#378ADD';
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        ctx.globalAlpha = 1;
+      }
+    }
+
     // 4b. Calibration overlay (calibrate mode)
     if (es.mode === 'calibrate' && es.calibrateA) {
       const aScreen = toScreen(es.calibrateA.nx * W, es.calibrateA.ny * contentH);

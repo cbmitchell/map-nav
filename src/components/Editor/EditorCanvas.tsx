@@ -11,6 +11,7 @@ import { distanceToSegment, px2norm } from '../../utils/geometry';
 import { computeEdgeWeight } from '../../utils/pathfinding';
 import { euclideanWeight } from '../../utils/geometry';
 import { useMobile } from '../../hooks/useMobile';
+import { generateId } from '../../utils/id';
 import popupStyles from './EditorCanvas.module.css';
 
 // ---------------------------------------------------------------------------
@@ -72,6 +73,9 @@ export function EditorCanvas({
 }: EditorCanvasProps) {
   const { isMobile, isTablet } = useMobile();
   const isSmall = isMobile || isTablet;
+  // Auto-connect/snap-to-axis are unavailable in mobile mode — gate on this everywhere
+  // instead of the raw flag, so it stays inert even if state persists across a resize.
+  const pathModeActive = editorState.autoConnectEnabled && !isSmall;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -287,33 +291,89 @@ export function EditorCanvas({
     return false;
   };
 
+  // Path mode (auto-connect): if snap-to-axis is also on and there's a previous node to
+  // connect from, snap a content-space point to align with it on whichever axis needs
+  // the smaller correction. Shared by the click/tap handler and the live cursor preview
+  // so both agree on exactly where the next node will land.
+  function applyAxisSnap(x: number, y: number, W: number, H: number): { x: number; y: number } {
+    const es = esRef.current;
+    if (!(pathModeActive && es.snapToAxis && es.lastPathNodeId)) return { x, y };
+    const prevNode = buildingRef.current.nodes.find((n) => n.id === es.lastPathNodeId);
+    if (!prevNode) return { x, y };
+    const prevX = prevNode.nx * W;
+    const prevY = prevNode.ny * H;
+    return Math.abs(x - prevX) >= Math.abs(y - prevY) ? { x, y: prevY } : { x: prevX, y };
+  }
+
   // Node mode: places a new unlabeled node at the tap point, or splits an existing
-  // edge into two if the tap landed on one.
+  // edge into two if the tap landed on one. When path mode (auto-connect) is active,
+  // also wires an edge from the previous path node and continues the chain; when
+  // snap-to-axis is also on, the tap point is first snapped to align with the
+  // previous node on whichever axis needs the smaller correction.
   const placeOrSplitNodeAt = (screenX: number, screenY: number) => {
-    if (!activeSectionIdRef.current) return;
+    const sectionId = activeSectionIdRef.current;
+    if (!sectionId) return;
     const canvas = canvasRef.current!;
     const W = canvas.width;
     const H = contentHRef.current;
-    const { x, y } = screenToCanvas(screenX, screenY, zoomPanRef.current);
+    const es = esRef.current;
+    const raw = screenToCanvas(screenX, screenY, zoomPanRef.current);
+    const { x, y } = applyAxisSnap(raw.x, raw.y, W, H);
+
     const norm = px2norm(x, y, W, H);
     const clamped = { x: Math.max(0, Math.min(1, norm.x)), y: Math.max(0, Math.min(1, norm.y)) };
+    const { x: tapScreenX, y: tapScreenY } = contentToScreen(x, y);
+
+    const newNode: Node = {
+      id: generateId(),
+      sectionId,
+      nx: clamped.x,
+      ny: clamped.y,
+      label: '',
+      isRoom: false,
+      isConnector: false,
+    };
+
     const sectionNodes = getSectionNodes();
     const sectionEdges = getSectionEdges(sectionNodes);
     const edgeNodeIndex = new Map(buildingRef.current.nodes.map((n) => [n.id, n]));
+    let split = false;
     for (const edge of sectionEdges) {
       const edgeSrc = edgeNodeIndex.get(edge.srcId)!;
       const edgeTgt = edgeNodeIndex.get(edge.tgtId)!;
       const { x: esx, y: esy } = contentToScreen(edgeSrc.nx * W, edgeSrc.ny * H);
       const { x: etx, y: ety } = contentToScreen(edgeTgt.nx * W, edgeTgt.ny * H);
-      if (distanceToSegment(screenX, screenY, esx, esy, etx, ety) < 8) {
-        dispatch({ type: 'SPLIT_EDGE', payload: { edgeId: edge.id, nx: clamped.x, ny: clamped.y }, canvasW: W, canvasH: H });
-        return;
+      if (distanceToSegment(tapScreenX, tapScreenY, esx, esy, etx, ety) < 8) {
+        dispatch({ type: 'SPLIT_EDGE', payload: { edgeId: edge.id, nx: clamped.x, ny: clamped.y, newNodeId: newNode.id }, canvasW: W, canvasH: H });
+        split = true;
+        break;
       }
     }
-    dispatch({
-      type: 'ADD_NODE',
-      payload: { sectionId: activeSectionIdRef.current, nx: clamped.x, ny: clamped.y, label: '', isRoom: false, isConnector: false },
-    });
+    if (!split) {
+      dispatch({ type: 'ADD_NODE', payload: newNode });
+    }
+
+    if (pathModeActive) {
+      if (es.lastPathNodeId) {
+        const prevNode = buildingRef.current.nodes.find((n) => n.id === es.lastPathNodeId);
+        if (prevNode) {
+          const activeSection = buildingRef.current.sections.find((s) => s.id === sectionId);
+          const imgW = activeSection?.imageW ?? W;
+          const imgH = activeSection?.imageH ?? H;
+          const sectionScale = activeSection?.scale ?? 1.0;
+          const type = es.currentEdgeType;
+          const typeDef = buildingRef.current.edgeTypes.find((t) => t.id === type);
+          const weight = typeDef
+            ? computeEdgeWeight(typeDef, prevNode, newNode, imgW, imgH, sectionScale)
+            : euclideanWeight(prevNode, newNode, imgW, imgH) * sectionScale;
+          dispatch({
+            type: 'ADD_EDGE',
+            payload: { srcId: es.lastPathNodeId, tgtId: newNode.id, type, weight, crossSection: false },
+          });
+        }
+      }
+      onEditorStateChange({ lastPathNodeId: newNode.id, mousePos: null });
+    }
   };
 
   // Edge mode: hit-tests nodes at the tap point and begins/cancels/completes a pending
@@ -443,7 +503,12 @@ export function EditorCanvas({
 
     if (es.mode === 'node') {
       for (const node of sectionNodes) {
-        if (hitNodeScreen(screen.x, screen.y, node)) return;
+        if (hitNodeScreen(screen.x, screen.y, node)) {
+          if (pathModeActive && node.id === es.lastPathNodeId) {
+            onEditorStateChange({ lastPathNodeId: null, mousePos: null });
+          }
+          return;
+        }
       }
       if (!activeSectionIdRef.current) return;
       // Set up pending action: pan on drag, place/split on release
@@ -497,6 +562,8 @@ export function EditorCanvas({
     // Rubber-band preview: store mouse in content coords
     if (es.mode === 'edge' || (es.mode === 'calibrate' && es.calibrateA && !calibratePopup)) {
       onEditorStateChange({ mousePos: { x, y } });
+    } else if (es.mode === 'node' && pathModeActive && es.lastPathNodeId) {
+      onEditorStateChange({ mousePos: applyAxisSnap(x, y, W, H) });
     }
 
     // Drag node
@@ -558,7 +625,7 @@ export function EditorCanvas({
   };
 
   const handleMouseLeave = () => {
-    if (esRef.current.mode === 'edge' || esRef.current.mode === 'calibrate') {
+    if (esRef.current.mode === 'edge' || esRef.current.mode === 'calibrate' || esRef.current.mode === 'node') {
       onEditorStateChange({ mousePos: null });
     }
     if (panRef.current && !spaceRef.current) {
@@ -612,7 +679,12 @@ export function EditorCanvas({
 
     if (es.mode === 'node') {
       for (const node of sectionNodes) {
-        if (hitNodeScreen(sx, sy, node)) return;
+        if (hitNodeScreen(sx, sy, node)) {
+          if (pathModeActive && node.id === es.lastPathNodeId) {
+            onEditorStateChange({ lastPathNodeId: null, mousePos: null });
+          }
+          return;
+        }
       }
       placeOrSplitNodeAt(sx, sy);
     }
@@ -649,6 +721,8 @@ export function EditorCanvas({
 
     if (es.mode === 'edge' || (es.mode === 'calibrate' && es.calibrateA && !calibratePopup)) {
       onEditorStateChange({ mousePos: { x, y } });
+    } else if (es.mode === 'node' && pathModeActive && es.lastPathNodeId) {
+      onEditorStateChange({ mousePos: applyAxisSnap(x, y, W, H) });
     }
 
     if (dragRef.current && es.mode === 'select') {
@@ -670,7 +744,7 @@ export function EditorCanvas({
   const handleTouchEnd = () => {
     touchRef.current = null;
     dragRef.current = null;
-    if (esRef.current.mode === 'edge' || esRef.current.mode === 'calibrate') {
+    if (esRef.current.mode === 'edge' || esRef.current.mode === 'calibrate' || esRef.current.mode === 'node') {
       onEditorStateChange({ mousePos: null });
     }
   };

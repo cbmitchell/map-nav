@@ -233,6 +233,25 @@ Hit detection:
 | `link` | crosshair | special mode for cross-section edges — see Cross-section connections below |
 | `calibrate` | crosshair | click two points on the map to define a known real-world distance; entering the distance sets `Section.scale` via `CALIBRATE_SECTION` |
 
+### Node-path auto-connect (desktop only)
+
+Two toggles in the toolbar, shown only in `node` mode and only on desktop (hidden and
+functionally inert on mobile/tablet — `isMobile || isTablet`):
+
+- **Automatically create edges** — each click places a node connected by an edge (same
+  type as `currentEdgeType`) to the previously-placed node, continuing a chain across
+  clicks (`EditorState.lastPathNodeId` tracks the chain's current end). Clicking the
+  chain's last node again cancels the chain; so does pressing Escape (which also exits to
+  `select` mode) or switching tools. Turning this off also turns off "Snap to axis".
+  Clicking near an existing edge still splits it as normal — the split-in node becomes
+  the chain's new last node.
+- **Snap to axis** (togglable only while the above is on) — forces each new node to align
+  with the previous one on whichever axis (X or Y) needs the smaller correction, rather
+  than landing exactly under the cursor.
+
+Before each click, a low-opacity preview of the pending node + connecting edge follows
+the cursor (`useCanvasRenderer.ts`, reusing the `NODE_DIM_ALPHA` constant).
+
 ### Cross-section connections (link mode)
 
 When creating an edge between nodes in different sections:
@@ -368,6 +387,10 @@ Deleting a custom type reassigns all its edges to `walkway`.
 - Prefer explicit action types in the reducer over generic `UPDATE` actions with partial
   payloads — makes the action log readable when debugging.
 - All node IDs and edge IDs are generated with `generateId()` from `src/utils/id.ts` (wraps `crypto.randomUUID()`).
+  Reducer actions that create a node (`ADD_NODE`, `SPLIT_EDGE`) take the id as part of the
+  payload rather than generating it internally — the caller supplies it via `generateId()`
+  before dispatching (matching `ADD_SECTION`), needed whenever the caller must know the
+  new id synchronously (e.g. to immediately wire up a connecting edge).
 - Numbers displayed to the user are always rounded — no raw floats in the UI.
 
 ---

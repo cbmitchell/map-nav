@@ -15,13 +15,13 @@ export type Action =
   | { type: 'UPDATE_SECTION'; payload: { id: string; name?: string; floor?: number } }
   | { type: 'UPDATE_SECTION_IMAGE'; payload: { id: string; imageData: string; imageW: number; imageH: number } }
   | { type: 'DELETE_SECTION'; payload: { id: string } }
-  | { type: 'ADD_NODE'; payload: Omit<Node, 'id'> }
+  | { type: 'ADD_NODE'; payload: Node }
   | { type: 'UPDATE_NODE'; payload: Partial<Node> & { id: string }; canvasW?: number; canvasH?: number; coalesce?: boolean }
   | { type: 'DELETE_NODE'; payload: { id: string } }
   | { type: 'ADD_EDGE'; payload: Omit<Edge, 'id'> }
   | { type: 'UPDATE_EDGE'; payload: Partial<Edge> & { id: string } }
   | { type: 'DELETE_EDGE'; payload: { id: string } }
-  | { type: 'SPLIT_EDGE'; payload: { edgeId: string; nx: number; ny: number }; canvasW?: number; canvasH?: number }
+  | { type: 'SPLIT_EDGE'; payload: { edgeId: string; nx: number; ny: number; newNodeId: string }; canvasW?: number; canvasH?: number }
   | { type: 'ADD_EDGE_TYPE'; payload: Omit<EdgeTypeDef, 'id' | 'color' | 'dashPattern' | 'isBuiltIn'> }
   | { type: 'UPDATE_EDGE_TYPE'; payload: Omit<EdgeTypeDef, 'id' | 'color' | 'dashPattern' | 'isBuiltIn'> & { id: string } }
   | { type: 'DELETE_EDGE_TYPE'; payload: { id: string } }
@@ -150,8 +150,7 @@ function reducer(state: Building, action: Action): Building {
     }
 
     case 'ADD_NODE': {
-      const node: Node = { ...action.payload, id: generateId() };
-      return { ...state, nodes: [...state.nodes, node] };
+      return { ...state, nodes: [...state.nodes, action.payload] };
     }
 
     case 'UPDATE_NODE': {
@@ -211,7 +210,7 @@ function reducer(state: Building, action: Action): Building {
     }
 
     case 'SPLIT_EDGE': {
-      const { edgeId, nx, ny } = action.payload;
+      const { edgeId, nx, ny, newNodeId } = action.payload;
       const edge = state.edges.find((e) => e.id === edgeId);
       if (!edge || edge.crossSection) return state;
       const src = state.nodes.find((n) => n.id === edge.srcId);
@@ -219,7 +218,7 @@ function reducer(state: Building, action: Action): Building {
       if (!src || !tgt) return state;
 
       const newNode: Node = {
-        id: generateId(),
+        id: newNodeId,
         sectionId: src.sectionId,
         nx,
         ny,

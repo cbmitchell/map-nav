@@ -23,7 +23,7 @@ export function exportBuilding(building: Building): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'office-navigator.json';
+  a.download = `${building.name.trim().toLowerCase().replace(/\s+/g, '-')}.json`;
   a.click();
   // Defer revocation so the browser has time to initiate the download
   setTimeout(() => URL.revokeObjectURL(url), 1000);

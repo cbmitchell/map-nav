@@ -80,6 +80,7 @@ export function Editor({ state, dispatch, undo, storageError }: EditorProps) {
           pendingLinkSrc: null,
           selectedNodeId: null,
           selectedEdgeId: null,
+          lastPathNodeId: null,
         }));
         return;
       }
@@ -93,6 +94,7 @@ export function Editor({ state, dispatch, undo, storageError }: EditorProps) {
           mode: modeKey,
           pendingEdgeSrcId: null,
           pendingLinkSrc: null,
+          lastPathNodeId: null,
         }));
         return;
       }
