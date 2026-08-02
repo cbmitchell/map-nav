@@ -330,7 +330,7 @@ function reducer(state: Building, action: Action): Building {
     case 'SET_ROOM_MARKER': {
       const { nodeId } = action.payload;
       const node = state.nodes.find((n) => n.id === nodeId);
-      if (!node?.isRoom) return state;
+      if (!node) return state;
       const roomIds = new Set(state.nodes.filter((n) => n.isRoom).map((n) => n.id));
       const updatedEdges = state.edges
         .filter((e) => {
@@ -344,7 +344,11 @@ function reducer(state: Building, action: Action): Building {
         });
       return {
         ...state,
-        nodes: state.nodes.map((n) => (n.id === nodeId ? { ...n, isRoomMarker: true } : n)),
+        // Marking a node as a room marker implies it's a room — this can be dispatched
+        // before an in-progress "Is room" checkbox change has been saved via the label
+        // editor's own Save button (marker toggling acts immediately, independent of
+        // Save), so isRoom must be set here too rather than assumed already persisted.
+        nodes: state.nodes.map((n) => (n.id === nodeId ? { ...n, isRoom: true, isRoomMarker: true } : n)),
         edges: updatedEdges,
       };
     }
