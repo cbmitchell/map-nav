@@ -4,7 +4,6 @@ import type { ZoomPanState } from '../../hooks/useZoomPan';
 import { fitZoomPan } from '../../hooks/useZoomPan';
 import { useCanvasRenderer } from '../../hooks/useCanvasRenderer';
 import { useMobile } from '../../hooks/useMobile';
-import { ROOM_GROUP_PREFIX, collectRoomGroupMarkerIds, collectSuppressedRoomMembers, findRoomGroupForNode } from '../../utils/roomGroups';
 import styles from './NavigatorCanvas.module.css';
 
 const HIT_RADIUS = 12;
@@ -204,15 +203,8 @@ export function NavigatorCanvas({
   // Hit-test room nodes on the active section in screen space
   const hitTestRoomNode = (sx: number, sy: number): { id: string; label: string } | null => {
     const canvas = canvasRef.current!;
-    // While no route is displayed, a room-group's non-marker members are hidden
-    // (and thus unclickable) behind their marker, matching the canvas rendering —
-    // but once a route is active, click targets match whatever's actually visible.
-    const markerIds = collectRoomGroupMarkerIds(buildingRef.current.roomGroups);
-    const suppressedIds = collectSuppressedRoomMembers(buildingRef.current.roomGroups);
     const sectionNodes = buildingRef.current.nodes.filter(
-      (n) =>
-        n.sectionId === activeSectionIdRef.current &&
-        (markerIds.has(n.id) || (n.isRoom && (path !== null || !suppressedIds.has(n.id)))),
+      (n) => n.sectionId === activeSectionIdRef.current && n.isRoom,
     );
 
     let hit: { id: string; label: string } | null = null;
@@ -342,23 +334,15 @@ export function NavigatorCanvas({
   // Node context menu
   // ---------------------------------------------------------------------------
 
-  // A direct map click on any entrance of a grouped room resolves to the same
-  // room-group selector the search dropdown would produce, so both paths route
-  // identically (nearest entrance), rather than pinning to the exact door clicked.
-  const resolveNodeSelector = (nodeId: string): string => {
-    const group = findRoomGroupForNode(buildingRef.current.roomGroups, nodeId);
-    return group ? `${ROOM_GROUP_PREFIX}${group.id}` : nodeId;
-  };
-
   const handleSetOrigin = () => {
     if (!nodeMenu) return;
-    onSetOrigin(resolveNodeSelector(nodeMenu.nodeId));
+    onSetOrigin(nodeMenu.nodeId);
     setNodeMenu(null);
   };
 
   const handleSetDestination = () => {
     if (!nodeMenu) return;
-    onSetDestination(resolveNodeSelector(nodeMenu.nodeId));
+    onSetDestination(nodeMenu.nodeId);
     setNodeMenu(null);
   };
 

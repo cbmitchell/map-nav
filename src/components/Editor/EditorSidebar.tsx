@@ -1,14 +1,12 @@
 import { useState, useRef } from 'react';
 import clsx from 'clsx';
 import type { Dispatch, SetStateAction } from 'react';
-import type { Building, RoomGroup } from '../../types/graph';
+import type { Building } from '../../types/graph';
 import type { Action } from '../../hooks/useGraphReducer';
 import type { EdgeTypeDef } from '../../types/graph';
 import { loadPdf, renderPdfPage } from '../../utils/pdf';
 import { generateId } from '../../utils/id';
 import { CollapsibleSection } from '../shared/CollapsibleSection';
-import { SearchableSelect } from '../shared/SearchableSelect';
-import type { SearchableSelectOption } from '../shared/SearchableSelect';
 import styles from './EditorSidebar.module.css';
 
 interface EditorSidebarProps {
@@ -258,11 +256,6 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
   const [editEtForm, setEditEtForm] = useState<EdgeTypeFormState>(DEFAULT_ET_FORM);
   const [editEtError, setEditEtError] = useState('');
 
-  const [showRgForm, setShowRgForm] = useState(false);
-  const [rgName, setRgName] = useState('');
-  const [editingRoomGroupId, setEditingRoomGroupId] = useState<string | null>(null);
-  const [editRgName, setEditRgName] = useState('');
-
   const nextFloor =
     building.sections.length > 0
       ? Math.max(...building.sections.map((s) => s.floor)) + 1
@@ -400,56 +393,9 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
     setEditingEdgeTypeId(null);
   };
 
-  const handleAddRoomGroup = () => {
-    const name = rgName.trim();
-    if (!name) return;
-    dispatch({ type: 'ADD_ROOM_GROUP', payload: { id: generateId(), name } });
-    setShowRgForm(false);
-    setRgName('');
-  };
-
-  const startEditRoomGroup = (g: RoomGroup) => {
-    setEditingRoomGroupId(g.id);
-    setEditRgName(g.name);
-  };
-
-  const commitEditRoomGroup = () => {
-    if (!editingRoomGroupId) return;
-    const name = editRgName.trim();
-    if (name) {
-      dispatch({ type: 'UPDATE_ROOM_GROUP', payload: { id: editingRoomGroupId, name } });
-    }
-    setEditingRoomGroupId(null);
-  };
-
-  // Adding a node as an entrance or marker also flags it as a room, so it behaves
-  // correctly in Navigator without an extra manual step.
-  const handleSetMarker = (groupId: string, nodeId: string) => {
-    dispatch({ type: 'UPDATE_ROOM_GROUP', payload: { id: groupId, markerNodeId: nodeId } });
-    dispatch({ type: 'UPDATE_NODE', payload: { id: nodeId, isRoom: true } });
-  };
-
-  const handleAddEntrance = (group: RoomGroup, nodeId: string) => {
-    dispatch({ type: 'UPDATE_ROOM_GROUP', payload: { id: group.id, nodeIds: [...group.nodeIds, nodeId] } });
-    dispatch({ type: 'UPDATE_NODE', payload: { id: nodeId, isRoom: true } });
-  };
-
   const crossEdges = building.edges.filter((e) => e.crossSection);
   const nodeIndex = new Map(building.nodes.map((n) => [n.id, n]));
   const sectionIndex = new Map(building.sections.map((s) => [s.id, s]));
-
-  // A node already used (as member or marker) by any room group isn't offered again —
-  // one node can't stand in for two different rooms at once.
-  const usedRoomNodeIds = new Set(
-    building.roomGroups.flatMap((g) => [...g.nodeIds, ...(g.markerNodeId ? [g.markerNodeId] : [])]),
-  );
-  const roomGroupCandidateOptions: SearchableSelectOption[] = building.nodes
-    .filter((n) => !usedRoomNodeIds.has(n.id))
-    .map((n) => ({
-      id: n.id,
-      label: n.label || '(unlabeled)',
-      groupLabel: sectionIndex.get(n.sectionId)?.name ?? 'Unknown',
-    }));
 
   return (
     <>
@@ -651,134 +597,6 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
           </CollapsibleSection>
         </>
       )}
-
-      <div className={styles.divider} />
-      <CollapsibleSection title="Room groups" storageKey="editor-room-groups">
-        <div className={styles.crossList}>
-          {building.roomGroups.map((g) => {
-            const marker = g.markerNodeId ? nodeIndex.get(g.markerNodeId) : undefined;
-            const markerSection = marker ? sectionIndex.get(marker.sectionId) : undefined;
-            return (
-              <div key={g.id} className={styles.roomGroupItem}>
-                {editingRoomGroupId === g.id ? (
-                  <>
-                    <input
-                      className={styles.formInput}
-                      autoFocus
-                      value={editRgName}
-                      onChange={(e) => setEditRgName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') commitEditRoomGroup();
-                        if (e.key === 'Escape') setEditingRoomGroupId(null);
-                      }}
-                    />
-                    <div className={styles.formActions}>
-                      <button className={styles.cancelBtn} onClick={() => setEditingRoomGroupId(null)}>Cancel</button>
-                      <button className={styles.addBtn} onClick={commitEditRoomGroup}>Save</button>
-                    </div>
-                  </>
-                ) : (
-                  <div className={styles.formRow}>
-                    <span className={styles.etName}>{g.name}</span>
-                    <button className={styles.renameBtn} title="Rename room group" onClick={() => startEditRoomGroup(g)}>
-                      ✎
-                    </button>
-                    <button
-                      className={styles.deleteBtn}
-                      title="Delete room group"
-                      onClick={() => dispatch({ type: 'DELETE_ROOM_GROUP', payload: { id: g.id } })}
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
-
-                <div className={styles.roomGroupSub}>
-                  <span className={styles.roomGroupSubLabel}>Marker</span>
-                  {marker ? (
-                    <div className={styles.crossItem}>
-                      <span className={styles.crossLabel}>
-                        {marker.label || '(unlabeled)'} <span className={styles.crossSec}>({markerSection?.name ?? '?'})</span>
-                      </span>
-                      <button
-                        className={styles.deleteBtn}
-                        title="Clear marker"
-                        onClick={() => dispatch({ type: 'UPDATE_ROOM_GROUP', payload: { id: g.id, markerNodeId: null } })}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ) : (
-                    <SearchableSelect
-                      options={roomGroupCandidateOptions}
-                      value={null}
-                      onChange={(nodeId) => { if (nodeId) handleSetMarker(g.id, nodeId); }}
-                      placeholder="+ Set marker"
-                    />
-                  )}
-                </div>
-
-                <div className={styles.roomGroupSub}>
-                  <span className={styles.roomGroupSubLabel}>Entrances</span>
-                  {g.nodeIds.map((nodeId) => {
-                    const n = nodeIndex.get(nodeId);
-                    const sec = n ? sectionIndex.get(n.sectionId) : undefined;
-                    return (
-                      <div key={nodeId} className={styles.crossItem}>
-                        <span className={styles.crossLabel}>
-                          {n?.label || '(unlabeled)'} <span className={styles.crossSec}>({sec?.name ?? '?'})</span>
-                        </span>
-                        <button
-                          className={styles.deleteBtn}
-                          title="Remove entrance"
-                          onClick={() =>
-                            dispatch({
-                              type: 'UPDATE_ROOM_GROUP',
-                              payload: { id: g.id, nodeIds: g.nodeIds.filter((id) => id !== nodeId) },
-                            })
-                          }
-                        >
-                          ×
-                        </button>
-                      </div>
-                    );
-                  })}
-                  <SearchableSelect
-                    options={roomGroupCandidateOptions}
-                    value={null}
-                    onChange={(nodeId) => { if (nodeId) handleAddEntrance(g, nodeId); }}
-                    placeholder="+ Add entrance"
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {showRgForm ? (
-          <div className={styles.form}>
-            <input
-              className={styles.formInput}
-              autoFocus
-              placeholder="Room group name"
-              value={rgName}
-              onChange={(e) => setRgName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleAddRoomGroup();
-                if (e.key === 'Escape') setShowRgForm(false);
-              }}
-            />
-            <div className={styles.formActions}>
-              <button className={styles.cancelBtn} onClick={() => setShowRgForm(false)}>Cancel</button>
-              <button className={styles.addBtn} onClick={handleAddRoomGroup}>Add</button>
-            </div>
-          </div>
-        ) : (
-          <button className={styles.newSectionBtn} onClick={() => setShowRgForm(true)}>
-            + New Room Group
-          </button>
-        )}
-      </CollapsibleSection>
       </div>
     </>
   );

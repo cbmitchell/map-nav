@@ -2,7 +2,6 @@ import { useState } from 'react';
 import clsx from 'clsx';
 import type { Building } from '../../types/graph';
 import { useMobile } from '../../hooks/useMobile';
-import { ROOM_GROUP_PREFIX } from '../../utils/roomGroups';
 import { DirectionsPanel } from './DirectionsPanel';
 import { CollapsibleSection } from '../shared/CollapsibleSection';
 import { SearchableSelect } from '../shared/SearchableSelect';
@@ -19,8 +18,6 @@ interface NavigatorControlsProps {
   path: string[] | null;
   error: string | null;
   resolvedTgtLabel: string | null;
-  originLabel?: string | null;
-  destinationLabel?: string | null;
   activeSectionId: string | null;
   onSrcChange: (id: string | null) => void;
   onTgtChange: (id: string | null) => void;
@@ -42,8 +39,6 @@ export function NavigatorControls({
   path,
   error,
   resolvedTgtLabel,
-  originLabel,
-  destinationLabel,
   activeSectionId,
   onSrcChange,
   onTgtChange,
@@ -60,37 +55,29 @@ export function NavigatorControls({
   const [tabExpanded, setTabExpanded] = useState(true);
 
   const rooms = building.nodes.filter((n) => n.isRoom);
+
+  // Group rooms by section name for <optgroup>
   const sectionIndex = new Map(building.sections.map((s) => [s.id, s]));
-  const nodeIndex = new Map(building.nodes.map((n) => [n.id, n]));
+  const grouped = new Map<string, { sectionName: string; nodes: typeof rooms }>();
+  for (const node of rooms) {
+    const section = sectionIndex.get(node.sectionId);
+    const key = node.sectionId;
+    if (!grouped.has(key)) {
+      grouped.set(key, { sectionName: section?.name ?? 'Unknown', nodes: [] });
+    }
+    grouped.get(key)!.nodes.push(node);
+  }
 
   const knownCategories = [...new Set(
     rooms.filter((n) => n.category).map((n) => n.category as string),
   )].sort();
 
-  // Nodes belonging to a room group collapse into a single option (id-encoded with
-  // ROOM_GROUP_PREFIX) representing the whole room — routing later picks whichever
-  // member entrance is actually cheapest. Ungrouped rooms behave as before.
-  const groupedNodeIds = new Set(
-    building.roomGroups.flatMap((g) => [...g.nodeIds, ...(g.markerNodeId ? [g.markerNodeId] : [])]),
-  );
-
-  const roomSelectOptions = (excludeId: string | null): SearchableSelectOption[] => {
-    const options: SearchableSelectOption[] = [];
-    for (const g of building.roomGroups) {
-      if (g.nodeIds.length === 0) continue;
-      const optionId = `${ROOM_GROUP_PREFIX}${g.id}`;
-      if (optionId === excludeId) continue;
-      const rep = nodeIndex.get(g.markerNodeId ?? g.nodeIds[0]);
-      const sectionName = sectionIndex.get(rep?.sectionId ?? '')?.name ?? 'Unknown';
-      options.push({ id: optionId, label: g.name, groupLabel: sectionName });
-    }
-    for (const n of rooms) {
-      if (groupedNodeIds.has(n.id) || n.id === excludeId) continue;
-      const sectionName = sectionIndex.get(n.sectionId)?.name ?? 'Unknown';
-      options.push({ id: n.id, label: n.label || '(unlabeled)', groupLabel: sectionName });
-    }
-    return options;
-  };
+  const roomSelectOptions = (excludeId: string | null): SearchableSelectOption[] =>
+    [...grouped.values()].flatMap(({ sectionName, nodes }) =>
+      nodes
+        .filter((n) => n.id !== excludeId)
+        .map((n) => ({ id: n.id, label: n.label || '(unlabeled)', groupLabel: sectionName })),
+    );
 
   const noRooms = rooms.length === 0;
 
@@ -225,12 +212,7 @@ export function NavigatorControls({
         <span>Show directions</span>
       </label>
       {showDirections && path && path.length > 0 && (
-        <DirectionsPanel
-          building={building}
-          path={path}
-          originLabel={originLabel}
-          destinationLabel={destinationLabel}
-        />
+        <DirectionsPanel building={building} path={path} />
       )}
     </div>
   );

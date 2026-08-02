@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import type { Building, EdgeType } from '../types/graph';
-import { dijkstraBetweenSets } from '../utils/pathfinding';
-import { resolveRoomSelector, excludeRoomGroupMarkers } from '../utils/roomGroups';
+import { dijkstra, dijkstraToCategory } from '../utils/pathfinding';
 
 interface PathfinderResult {
   path: string[] | null;
@@ -18,13 +17,9 @@ export function usePathfinder(
   return useMemo(() => {
     if (!srcId || (!tgtId && !tgtCategory)) return { path: null, error: null };
 
-    const routableNodes = excludeRoomGroupMarkers(building.nodes, building.roomGroups);
-    const srcIds = resolveRoomSelector(building.roomGroups, srcId);
-    const targetIds = tgtCategory
-      ? new Set(building.nodes.filter((n) => n.isRoom && n.category === tgtCategory).map((n) => n.id))
-      : new Set(resolveRoomSelector(building.roomGroups, tgtId!));
-
-    const path = dijkstraBetweenSets(routableNodes, building.edges, srcIds, targetIds, excludedTypes);
+    const path = tgtCategory
+      ? dijkstraToCategory(building.nodes, building.edges, srcId, tgtCategory, excludedTypes)
+      : dijkstra(building.nodes, building.edges, srcId, tgtId!, excludedTypes);
 
     if (path === null) {
       const error =
@@ -33,5 +28,5 @@ export function usePathfinder(
     }
 
     return { path, error: null };
-  }, [building.nodes, building.edges, building.roomGroups, srcId, tgtId, tgtCategory, excludedTypes]);
+  }, [building.nodes, building.edges, srcId, tgtId, tgtCategory, excludedTypes]);
 }

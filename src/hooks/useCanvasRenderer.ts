@@ -5,7 +5,6 @@ import type { EditorState } from '../types/editor';
 import { DEFAULT_EDITOR_STATE } from '../types/editor';
 import type { ZoomPanState } from './useZoomPan';
 import { DEFAULT_ZOOM_PAN } from './useZoomPan';
-import { collectRoomGroupMarkerIds, collectSuppressedRoomMembers } from '../utils/roomGroups';
 
 // ---------------------------------------------------------------------------
 // Edge display helpers (derived from building.edgeTypes at render time)
@@ -127,14 +126,6 @@ export function useCanvasRenderer(
 
     const sectionNodes = building.nodes.filter((n) => n.sectionId === activeSectionId);
     const nodeIndex = new Map(building.nodes.map((n) => [n.id, n]));
-
-    // Room-group members other than the marker are hidden while no route is displayed
-    // (the marker stands in for the whole group during browsing/selection) — but not
-    // once a route is active, where visibility is governed purely by path membership,
-    // same as any other node. A marker doesn't require isRoom itself, so both branches
-    // below also need an explicit markerIds check to keep it visible/dimmed correctly.
-    const markerIds = collectRoomGroupMarkerIds(building.roomGroups);
-    const suppressedIds = collectSuppressedRoomMembers(building.roomGroups);
 
     const sectionEdges = building.edges.filter((e) => {
       if (e.crossSection) return false;
@@ -375,14 +366,9 @@ export function useCanvasRenderer(
     if (isPathMode) {
       const isSignificantNode = (n: typeof sectionNodes[number]) =>
         n.isRoom || n.isConnector || n.label !== '';
-      // Off-path nodes are only shown (dimmed) if they're rooms, or a room-group
-      // marker (which may not itself be flagged isRoom). Room-group suppression
-      // (below, no-path branch) does NOT apply here — while a route is active, every
-      // room's visibility (including a group's marker, dimmed like any other off-path
-      // room, never highlighted since markers never appear in a computed path) is
-      // governed purely by isRoom/path membership, unchanged from before the
-      // room-group feature existed.
-      const isDimEligible = (n: typeof sectionNodes[number]) => n.isRoom || markerIds.has(n.id);
+      // Off-path connectors stay hidden — only rooms/labeled nodes are shown dimmed
+      const isDimEligible = (n: typeof sectionNodes[number]) =>
+        !n.isConnector && (n.isRoom || n.label !== '');
       ctx.globalAlpha = NODE_DIM_ALPHA;
       for (const node of sectionNodes) {
         if (!pathNodeSet!.has(node.id) && isDimEligible(node)) drawNode(node, false);
@@ -392,15 +378,8 @@ export function useCanvasRenderer(
         if (pathNodeSet!.has(node.id) && isSignificantNode(node)) drawNode(node, true);
       }
     } else {
-      // No route displayed: only rooms (and any room-group marker) show, and a room-
-      // group's non-marker members stay hidden behind their marker (if one exists) so
-      // the user picks the group via one clean node rather than several scattered
-      // entrances.
       for (const node of sectionNodes) {
-        const displayable = node.isRoom || markerIds.has(node.id);
-        if (!roomsOnly || (displayable && !suppressedIds.has(node.id))) {
-          drawNode(node, false);
-        }
+        if (!roomsOnly || node.isRoom) drawNode(node, false);
       }
     }
 

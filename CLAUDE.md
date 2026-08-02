@@ -41,7 +41,7 @@ src/
       Editor.tsx             # editor shell component
       EditorCanvas.tsx       # canvas rendering + mouse interaction
       EditorToolbar.tsx      # mode/tool/edge-type controls
-      EditorSidebar.tsx      # section/floor management, cross-section connections, edge type management, room groups
+      EditorSidebar.tsx      # section/floor management, cross-section connections, edge type management
     Navigator/
       Navigator.tsx          # navigator shell, per-section zoom retention
       NavigatorCanvas.tsx    # read-only canvas with path highlight
@@ -63,7 +63,6 @@ src/
     geometry.ts              # hit detection, euclidean distance, norm/px conversion
     export.ts                # serialize/deserialize graph bundle (base64-in-JSON)
     pathfinding.ts           # Dijkstra algorithm (pure function, no React)
-    roomGroups.ts            # room-group selector encoding/resolution (pure, no React)
     pdf.ts                   # PDF import utility
     id.ts                    # ID generation (generateId wrapping crypto.randomUUID)
     imageStore.ts            # IndexedDB CRUD for section images (save/getAll/delete)
@@ -97,15 +96,6 @@ interface Building {
   nodes: Node[];
   edges: Edge[];
   edgeTypes: EdgeTypeDef[]; // built-in defaults + any user-created custom types
-  roomGroups: RoomGroup[];  // multi-entrance room definitions, see below
-}
-
-interface RoomGroup {
-  id: string;
-  name: string;           // display name, independent of any member node's own label
-  nodeIds: string[];       // member entrance node ids (real routing candidates)
-  markerNodeId?: string;   // optional display-only anchor node id; excluded from
-                            // pathfinding entirely, even if it has edges
 }
 
 interface Section {
@@ -172,10 +162,10 @@ Action types:
 - `ADD_SECTION` — add a new section (floor + image)
 - `UPDATE_SECTION` — rename a section or change its floor number
 - `UPDATE_SECTION_IMAGE` — set/replace the image for a section
-- `DELETE_SECTION` — remove a section and cascade-delete all nodes/edges on it (including cross-section edges into other floors); cleans up the section's stored image and strips any deleted node ids from `RoomGroup.nodeIds`/`markerNodeId`
+- `DELETE_SECTION` — remove a section and cascade-delete all nodes/edges on it (including cross-section edges into other floors); cleans up the section's stored image
 - `ADD_NODE` — place a node on a section
 - `UPDATE_NODE` — update label, isRoom, isConnector, category, or position (position change recalculates affected edge weights)
-- `DELETE_NODE` — remove node and all its edges; also strips the deleted node's id from any `RoomGroup.nodeIds`/`markerNodeId` referencing it
+- `DELETE_NODE` — remove node and all its edges
 - `ADD_EDGE` — connect two nodes
 - `UPDATE_EDGE` — change edge type or other fields (recalculates weight when type changes)
 - `DELETE_EDGE` — remove an edge
@@ -184,9 +174,6 @@ Action types:
 - `UPDATE_EDGE_TYPE` — edit a custom or built-in edge type's name/weight/accessibility (recalculates weight for all edges using that type)
 - `DELETE_EDGE_TYPE` — remove a custom edge type (built-in types cannot be deleted); edges of that type are reassigned to `walkway`
 - `CALIBRATE_SECTION` — set `Section.scale` and recalculate all length-based edge weights for that section
-- `ADD_ROOM_GROUP` — add a new, initially-empty room group
-- `UPDATE_ROOM_GROUP` — rename a room group, or change its member `nodeIds`/`markerNodeId` (`markerNodeId: null` clears it)
-- `DELETE_ROOM_GROUP` — remove a room group; member nodes are untouched (they simply stop being grouped)
 - `LOAD_BUILDING` — replace entire state (used for import)
 
 ### Persistence: localStorage + IndexedDB
@@ -295,31 +282,6 @@ The user's current section view updates automatically to show the origin node's 
 
 Rooms can also be picked directly on the map: clicking a room node opens a small context
 menu at the click point with "Set origin" / "Set destination" options (`NavigatorCanvas.tsx`).
-
-**Multi-entrance rooms (`RoomGroup`):** a room with several doors is represented by a
-`RoomGroup` (`Building.roomGroups`, managed entirely from the Editor's "Room groups"
-sidebar section — not from the per-node popup). A group has a `name`, a list of member
-`nodeIds` (the real entrance nodes, added via a searchable picker), and an optional
-`markerNodeId` pointing at a display-only anchor node (e.g. placed at the room's
-center). Adding a node as an entrance or marker also flags it `isRoom: true`
-automatically. Grouped nodes collapse into a single dropdown/map-click entry
-(`ROOM_GROUP_PREFIX`-encoded selector, `src/utils/roomGroups.ts`); selecting the group
-as an origin or destination routes to whichever member yields the cheapest actual path
-(`dijkstraBetweenSets()` in `src/utils/pathfinding.ts`) — members are never treated as
-free-to-traverse relative to each other mid-path, and a marker is always excluded from
-pathfinding entirely (`excludeRoomGroupMarkers()`), even if it has edges.
-
-Whenever a group has a marker, its other (member) nodes are automatically hidden from
-the map and unclickable — *but only while no route is displayed* — so the marker is the
-sole visible/clickable representative during origin/destination selection
-(`collectSuppressedRoomMembers()`/`collectRoomGroupMarkerIds()` in
-`src/utils/roomGroups.ts`, applied in `useCanvasRenderer.ts`'s no-path branch and
-`NavigatorCanvas.tsx`'s room-click hit test). Once a route is active, visibility of
-every room (including a group's marker) reverts to being governed purely by
-`isRoom`/path membership — a marker is never highlighted as if it were the routed-to
-node, since the actual resolved entrance is a different, real node. A group with no
-marker shows all of its member entrances individually, each resolving to the same
-group selector when picked.
 
 ### Responsive layout
 
