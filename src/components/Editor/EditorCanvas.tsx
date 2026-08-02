@@ -139,6 +139,14 @@ export function EditorCanvas({
     return () => observer.disconnect();
   }, [activeSectionId, building.sections, redraw, isSmall, onResize]);
 
+  // Close the edge editor popup if its edge was deleted elsewhere (keyboard shortcut,
+  // sidebar delete button) — not just via this popup's own Delete Edge button.
+  useEffect(() => {
+    if (edgeEditor && !building.edges.some((e) => e.id === edgeEditor.edgeId)) {
+      setEdgeEditor(null);
+    }
+  }, [building.edges, edgeEditor]);
+
   // Wheel zoom (non-passive so we can preventDefault)
   useEffect(() => {
     const canvas = canvasRef.current;
