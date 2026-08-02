@@ -922,6 +922,7 @@ export function EditorCanvas({
 
   const section = building.sections.find((s) => s.id === activeSectionId);
   const hasImage = !!section?.imageData;
+  const existingCategories = [...new Set(building.nodes.map((n) => n.category).filter((c): c is string => !!c))].sort();
   const canvasW = canvasRef.current?.width ?? 400;
 
   const closePopups = () => { setLabelEditor(null); setEdgeEditor(null); setCalibratePopup(null); onEditorStateChange({ calibrateA: null, calibrateB: null }); };
@@ -995,7 +996,13 @@ export function EditorCanvas({
                     if (ev.key === 'Enter') submitLabelEditor();
                     if (ev.key === 'Escape') setLabelEditor(null);
                   }}
+                  list="category-options"
                 />
+                <datalist id="category-options">
+                  {existingCategories.map((c) => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
               </div>
             )}
             <div className={popupStyles.popupRow}>
