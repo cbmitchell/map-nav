@@ -103,9 +103,9 @@ export function NavigatorCanvas({
       );
       const imageAspectH = section?.imageW ? Math.round((w * section.imageH) / section.imageW) : w;
       contentHRef.current = imageAspectH;
-      const h = isSmall
-        ? Math.max(container.clientHeight, imageAspectH)
-        : imageAspectH;
+      // Expand the canvas to fill all available vertical space so zoomed/panned
+      // content is not clipped at the image's unzoomed aspect-ratio boundary.
+      const h = Math.max(container.clientHeight, imageAspectH);
       if (canvas.width !== w || canvas.height !== h) {
         canvas.width = w;
         canvas.height = h;

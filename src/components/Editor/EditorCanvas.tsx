@@ -118,16 +118,14 @@ export function EditorCanvas({
       const section = buildingRef.current.sections.find((s) => s.id === activeSectionIdRef.current);
       const imageAspectH = section?.imageW ? Math.round(w * section.imageH / section.imageW) : w;
       contentHRef.current = imageAspectH;
-      // On mobile/tablet, expand the canvas to fill all available vertical space so zoomed
+      // Expand the canvas to fill all available vertical space so zoomed/panned
       // content is not clipped at the image's unzoomed aspect-ratio boundary.
-      const h = isSmall
-        ? Math.max(container.clientHeight, imageAspectH)
-        : imageAspectH;
+      const h = Math.max(container.clientHeight, imageAspectH);
       if (canvas.width !== w || canvas.height !== h) {
         canvas.width = w;
         canvas.height = h;
       }
-      onResize(w, h);
+      onResize(w, imageAspectH);
       redraw();
     };
 
