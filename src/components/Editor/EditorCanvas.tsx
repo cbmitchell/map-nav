@@ -90,6 +90,7 @@ export function EditorCanvas({
   const touchRef = useRef<{ lastX: number; lastY: number; lastDist: number } | null>(null);
   const lastTapRef = useRef<{ time: number; x: number; y: number } | null>(null);
   const spaceRef = useRef(false);
+  const hoverNodeRef = useRef(false);
 
 
   const [labelEditor, setLabelEditor] = useState<LabelEditorState | null>(null);
@@ -196,6 +197,7 @@ export function EditorCanvas({
     const canvas = canvasRef.current;
     if (!canvas) return;
     if (spaceRef.current) { canvas.style.cursor = panRef.current ? 'grabbing' : 'grab'; return; }
+    if (hoverNodeRef.current) { canvas.style.cursor = 'pointer'; return; }
     const map: Record<string, string> = { select: 'default', node: 'crosshair', edge: 'cell', link: 'crosshair', calibrate: 'crosshair' };
     canvas.style.cursor = map[esRef.current.mode] ?? 'default';
   }
@@ -597,6 +599,13 @@ export function EditorCanvas({
     const H = contentHRef.current;
     const es = esRef.current;
 
+    // Pointer cursor when hovering a node, taking priority over the mode's default cursor
+    const hovered = getSectionNodes().some((n) => hitNodeScreen(screen.x, screen.y, n));
+    if (hovered !== hoverNodeRef.current) {
+      hoverNodeRef.current = hovered;
+      updateCursor();
+    }
+
     // Rubber-band preview: store mouse in content coords
     if (es.mode === 'edge' || (es.mode === 'calibrate' && es.calibrateA && !calibratePopup)) {
       onEditorStateChange({ mousePos: { x, y } });
@@ -666,10 +675,11 @@ export function EditorCanvas({
     if (esRef.current.mode === 'edge' || esRef.current.mode === 'calibrate' || esRef.current.mode === 'node') {
       onEditorStateChange({ mousePos: null });
     }
+    hoverNodeRef.current = false;
     if (panRef.current && !spaceRef.current) {
       panRef.current = null;
-      updateCursor();
     }
+    updateCursor();
     pendingClickRef.current = null;
   };
 

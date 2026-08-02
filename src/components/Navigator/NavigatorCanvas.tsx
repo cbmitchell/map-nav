@@ -258,11 +258,18 @@ export function NavigatorCanvas({
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!panRef.current) return;
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
+
+    if (!panRef.current) {
+      if (!spaceRef.current) {
+        canvas.style.cursor = hitTestRoomNode(sx, sy) ? 'pointer' : 'grab';
+      }
+      return;
+    }
+
     const dx = sx - panRef.current.lastX;
     const dy = sy - panRef.current.lastY;
     if (dx !== 0 || dy !== 0) hasPannedRef.current = true;
