@@ -53,6 +53,7 @@ interface EditorCanvasProps {
   zoomPan: ZoomPanState;
   onWheel: (e: WheelEvent, rect: DOMRect) => void;
   onPan: (dx: number, dy: number) => void;
+  onZoomAt: (screenX: number, screenY: number, newScale: number) => void;
   onResize: (w: number, h: number) => void;
 }
 
@@ -69,6 +70,7 @@ export function EditorCanvas({
   zoomPan,
   onWheel,
   onPan,
+  onZoomAt,
   onResize,
 }: EditorCanvasProps) {
   const { isMobile, isTablet } = useMobile();
@@ -83,7 +85,7 @@ export function EditorCanvas({
   const dragRef = useRef<{ nodeId: string; moved: boolean } | null>(null);
   const panRef = useRef<{ lastX: number; lastY: number } | null>(null);
   const pendingClickRef = useRef<{ startX: number; startY: number; panned: boolean } | null>(null);
-  const touchRef = useRef<{ lastX: number; lastY: number } | null>(null);
+  const touchRef = useRef<{ lastX: number; lastY: number; lastDist: number } | null>(null);
   const lastTapRef = useRef<{ time: number; x: number; y: number } | null>(null);
   const spaceRef = useRef(false);
 
@@ -645,6 +647,20 @@ export function EditorCanvas({
   // ---------------------------------------------------------------------------
 
   const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      // A second finger touching down starts a pinch-zoom gesture — cancel any
+      // pending single-touch action (drag/tap) so it doesn't also fire.
+      dragRef.current = null;
+      lastTapRef.current = null;
+      const [t1, t2] = [e.touches[0], e.touches[1]];
+      const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      const midX = (t1.clientX + t2.clientX) / 2;
+      const midY = (t1.clientY + t2.clientY) / 2;
+      const canvas = canvasRef.current!;
+      const rect = canvas.getBoundingClientRect();
+      touchRef.current = { lastX: midX - rect.left, lastY: midY - rect.top, lastDist: dist };
+      return;
+    }
     if (e.touches.length !== 1) return;
     const t = e.touches[0];
     const canvas = canvasRef.current!;
@@ -652,7 +668,7 @@ export function EditorCanvas({
     const sx = t.clientX - rect.left;
     const sy = t.clientY - rect.top;
 
-    touchRef.current = { lastX: t.clientX, lastY: t.clientY };
+    touchRef.current = { lastX: t.clientX, lastY: t.clientY, lastDist: 0 };
 
     // Double-tap detection — fire label editor open if two taps within 300ms/20px
     const now = Date.now();
@@ -712,11 +728,33 @@ export function EditorCanvas({
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (e.touches.length !== 1 || !touchRef.current) return;
+    if (!touchRef.current) return;
+
+    if (e.touches.length === 2) {
+      const [t1, t2] = [e.touches[0], e.touches[1]];
+      const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      const midX = (t1.clientX + t2.clientX) / 2;
+      const midY = (t1.clientY + t2.clientY) / 2;
+      const canvas = canvasRef.current!;
+      const rect = canvas.getBoundingClientRect();
+      const sx = midX - rect.left;
+      const sy = midY - rect.top;
+
+      if (touchRef.current.lastDist > 0) {
+        const factor = dist / touchRef.current.lastDist;
+        onZoomAt(sx, sy, zoomPanRef.current.scale * factor);
+        onPan(sx - touchRef.current.lastX, sy - touchRef.current.lastY);
+      }
+
+      touchRef.current = { lastX: sx, lastY: sy, lastDist: dist };
+      return;
+    }
+
+    if (e.touches.length !== 1) return;
     const t = e.touches[0];
     const dx = t.clientX - touchRef.current.lastX;
     const dy = t.clientY - touchRef.current.lastY;
-    touchRef.current = { lastX: t.clientX, lastY: t.clientY };
+    touchRef.current = { lastX: t.clientX, lastY: t.clientY, lastDist: 0 };
 
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();

@@ -27,7 +27,7 @@ export function Editor({ state, dispatch, undo, storageError }: EditorProps) {
   const [preferredSectionId, setActiveSectionId] = useState<string | null>(null);
   const activeSectionId = preferredSectionId ?? state.sections[0]?.id ?? null;
   const [editorState, setEditorState] = useState<EditorState>(DEFAULT_EDITOR_STATE);
-  const { zoomPan, zoomIn, zoomOut, resetView, handleWheel, pan, setView } = useZoomPan();
+  const { zoomPan, zoomIn, zoomOut, resetView, handleWheel, pan, zoomAt, setView } = useZoomPan();
 
   // Per-section zoom retention
   const zoomPerSection = useRef<Record<string, ZoomPanState>>({});
@@ -237,6 +237,7 @@ export function Editor({ state, dispatch, undo, storageError }: EditorProps) {
               zoomPan={zoomPan}
               onWheel={handleWheel}
               onPan={pan}
+              onZoomAt={zoomAt}
               onResize={handleResize}
             />
           )}
