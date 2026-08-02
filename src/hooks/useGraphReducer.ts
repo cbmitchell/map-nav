@@ -1,5 +1,5 @@
 import { useReducer, useEffect, useLayoutEffect, useRef, useCallback, useState } from 'react';
-import type { Building, Section, Node, Edge, EdgeTypeDef } from '../types/graph';
+import type { Building, Section, Node, Edge, EdgeTypeDef, RoomGroup } from '../types/graph';
 import { euclideanWeight } from '../utils/geometry';
 import { DEFAULT_EDGE_TYPES, CUSTOM_TYPE_COLORS, computeEdgeWeight } from '../utils/pathfinding';
 import { generateId } from '../utils/id';
@@ -26,6 +26,9 @@ export type Action =
   | { type: 'UPDATE_EDGE_TYPE'; payload: Omit<EdgeTypeDef, 'id' | 'color' | 'dashPattern' | 'isBuiltIn'> & { id: string } }
   | { type: 'DELETE_EDGE_TYPE'; payload: { id: string } }
   | { type: 'CALIBRATE_SECTION'; payload: { sectionId: string; scale: number } }
+  | { type: 'ADD_ROOM_GROUP'; payload: { id: string; name: string } }
+  | { type: 'UPDATE_ROOM_GROUP'; payload: { id: string; name?: string; nodeIds?: string[]; markerNodeId?: string | null } }
+  | { type: 'DELETE_ROOM_GROUP'; payload: { id: string } }
   | { type: 'LOAD_BUILDING'; payload: Building };
 
 // ---------------------------------------------------------------------------
@@ -44,7 +47,7 @@ let _migrationDone = false;
 const DEFAULT_BUILDING_NAME = 'Untitled Building';
 
 function emptyBuilding(): Building {
-  return { name: DEFAULT_BUILDING_NAME, sections: [], nodes: [], edges: [], edgeTypes: DEFAULT_EDGE_TYPES };
+  return { name: DEFAULT_BUILDING_NAME, sections: [], nodes: [], edges: [], edgeTypes: DEFAULT_EDGE_TYPES, roomGroups: [] };
 }
 
 function migrateBuilding(b: Building): Building {
@@ -54,6 +57,9 @@ function migrateBuilding(b: Building): Building {
   }
   if (!result.name) {
     result = { ...result, name: DEFAULT_BUILDING_NAME };
+  }
+  if (!result.roomGroups) {
+    result = { ...result, roomGroups: [] };
   }
   return result;
 }
@@ -105,6 +111,16 @@ function nextCustomColor(edgeTypes: EdgeTypeDef[]): string {
   return CUSTOM_TYPE_COLORS.find((c) => !usedColors.has(c)) ?? CUSTOM_TYPE_COLORS[0];
 }
 
+// Strips deleted node ids out of every room group's membership/marker reference —
+// used by both DELETE_NODE (one id) and DELETE_SECTION (a batch of ids).
+function removeNodesFromRoomGroups(roomGroups: RoomGroup[], removedIds: Set<string>): RoomGroup[] {
+  return roomGroups.map((g) => ({
+    ...g,
+    nodeIds: g.nodeIds.filter((id) => !removedIds.has(id)),
+    markerNodeId: g.markerNodeId && removedIds.has(g.markerNodeId) ? undefined : g.markerNodeId,
+  }));
+}
+
 // ---------------------------------------------------------------------------
 // Reducer
 // ---------------------------------------------------------------------------
@@ -146,6 +162,7 @@ function reducer(state: Building, action: Action): Building {
         sections: state.sections.filter((s) => s.id !== id),
         nodes: state.nodes.filter((n) => n.sectionId !== id),
         edges: state.edges.filter((e) => !removedNodeIds.has(e.srcId) && !removedNodeIds.has(e.tgtId)),
+        roomGroups: removeNodesFromRoomGroups(state.roomGroups, removedNodeIds),
       };
     }
 
@@ -170,6 +187,7 @@ function reducer(state: Building, action: Action): Building {
         edges: state.edges.filter(
           (e) => e.srcId !== action.payload.id && e.tgtId !== action.payload.id,
         ),
+        roomGroups: removeNodesFromRoomGroups(state.roomGroups, new Set([action.payload.id])),
       };
     }
 
@@ -322,6 +340,30 @@ function reducer(state: Building, action: Action): Building {
         sections: state.sections.map((s) => (s.id === sectionId ? { ...s, scale } : s)),
         edges: updatedEdges,
       };
+    }
+
+    case 'ADD_ROOM_GROUP': {
+      const { id, name } = action.payload;
+      return { ...state, roomGroups: [...state.roomGroups, { id, name, nodeIds: [] }] };
+    }
+
+    case 'UPDATE_ROOM_GROUP': {
+      const { id, markerNodeId, ...rest } = action.payload;
+      return {
+        ...state,
+        roomGroups: state.roomGroups.map((g) => {
+          if (g.id !== id) return g;
+          const updated = { ...g, ...rest };
+          if (markerNodeId !== undefined) {
+            updated.markerNodeId = markerNodeId === null ? undefined : markerNodeId;
+          }
+          return updated;
+        }),
+      };
+    }
+
+    case 'DELETE_ROOM_GROUP': {
+      return { ...state, roomGroups: state.roomGroups.filter((g) => g.id !== action.payload.id) };
     }
 
     case 'LOAD_BUILDING': {

@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import type { Building } from '../../types/graph';
 import styles from './Navigator.module.css';
 import { usePathfinder } from '../../hooks/usePathfinder';
+import { ROOM_GROUP_PREFIX, resolveRoomSelector } from '../../utils/roomGroups';
 import { useZoomPan, DEFAULT_ZOOM_PAN } from '../../hooks/useZoomPan';
 import type { ZoomPanState } from '../../hooks/useZoomPan';
 import { NavigatorControls } from './NavigatorControls';
@@ -48,10 +49,11 @@ export function Navigator({ state }: NavigatorProps) {
   const handleSrcChange = useCallback((id: string | null) => {
     setSrcId(id);
     if (id) {
-      const srcNode = state.nodes.find((n) => n.id === id);
+      const [memberId] = resolveRoomSelector(state.roomGroups, id);
+      const srcNode = state.nodes.find((n) => n.id === memberId);
       if (srcNode) switchSection(srcNode.sectionId);
     }
-  }, [state.nodes, switchSection]);
+  }, [state.nodes, state.roomGroups, switchSection]);
 
   const handleTgtChange = useCallback((id: string | null) => {
     setTgtId(id);
@@ -62,6 +64,17 @@ export function Navigator({ state }: NavigatorProps) {
     setTgtCategory(cat);
     setTgtId(null);
   }, []);
+
+  // When origin/destination is a room-group selector, look up the group's own name —
+  // used to override the Directions panel's Start/Arrive lines, which would otherwise
+  // show the specific (arbitrary) entrance's own label.
+  const roomGroupDisplayName = (id: string | null): string | null => {
+    if (!id?.startsWith(ROOM_GROUP_PREFIX)) return null;
+    const groupId = id.slice(ROOM_GROUP_PREFIX.length);
+    return state.roomGroups.find((g) => g.id === groupId)?.name ?? null;
+  };
+  const originLabel = roomGroupDisplayName(srcId);
+  const destinationLabel = tgtCategory ? null : roomGroupDisplayName(tgtId);
 
   // When routing by category, resolve the destination room name from the path's last node
   const resolvedTgtLabel = useMemo(() => {
@@ -131,6 +144,8 @@ export function Navigator({ state }: NavigatorProps) {
           path={path}
           error={error}
           resolvedTgtLabel={resolvedTgtLabel}
+          originLabel={originLabel}
+          destinationLabel={destinationLabel}
           onSrcChange={handleSrcChange}
           onTgtChange={handleTgtChange}
           onTgtCategoryChange={handleTgtCategoryChange}

@@ -324,6 +324,28 @@
   color: #D85A30;
 }
 
+.roomGroupItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+}
+
+.roomGroupSub {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.roomGroupSubLabel {
+  font-size: 10px;
+  color: var(--text-ghost);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
 @media (max-width: 1024px) {
   .sectionItem {
     padding: 11px 12px;

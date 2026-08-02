@@ -12,12 +12,21 @@ export interface EdgeTypeDef {
   isBuiltIn: boolean;
 }
 
+export interface RoomGroup {
+  id: string;
+  name: string;           // display name, independent of any member node's own label
+  nodeIds: string[];       // member entrance node ids (real routing candidates)
+  markerNodeId?: string;   // optional display-only anchor node id; excluded from
+                            // pathfinding entirely, even if it has edges
+}
+
 export interface Building {
   name: string;
   sections: Section[];
   nodes: Node[];
   edges: Edge[];
   edgeTypes: EdgeTypeDef[];
+  roomGroups: RoomGroup[];
 }
 
 export interface Section {
