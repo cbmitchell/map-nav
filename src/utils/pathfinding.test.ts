@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { dijkstra, dijkstraToCategory } from './pathfinding';
+import { dijkstra, dijkstraToCategory, dijkstraBetweenSets } from './pathfinding';
 import type { Node, Edge } from '../types/graph';
 
 // ---------------------------------------------------------------------------
@@ -143,5 +143,54 @@ describe('dijkstraToCategory', () => {
     const nodes = [node('A', { isRoom: true, category: 'bathroom' }), node('B')];
     const edges = [edge('e1', 'A', 'B', 1)];
     expect(dijkstraToCategory(nodes, edges, 'A', 'bathroom', new Set())).toEqual(['A']);
+  });
+});
+
+describe('dijkstraBetweenSets', () => {
+  it('matches dijkstra for a single source and single target', () => {
+    const nodes = [node('A'), node('B'), node('C')];
+    const edges = [edge('e1', 'A', 'B', 1), edge('e2', 'B', 'C', 1)];
+    expect(dijkstraBetweenSets(nodes, edges, ['A'], new Set(['C']), new Set())).toEqual(['A', 'B', 'C']);
+  });
+
+  it('routes to the nearest of several target entrances', () => {
+    //  A --1-- Door1
+    //  A --5-- Door2
+    const nodes = [node('A'), node('Door1'), node('Door2')];
+    const edges = [edge('e1', 'A', 'Door1', 1), edge('e2', 'A', 'Door2', 5)];
+    const path = dijkstraBetweenSets(nodes, edges, ['A'], new Set(['Door1', 'Door2']), new Set());
+    expect(path).toEqual(['A', 'Door1']);
+  });
+
+  it('routes from the nearest of several origin entrances', () => {
+    //  Door1 --5-- Z
+    //  Door2 --1-- Z
+    const nodes = [node('Door1'), node('Door2'), node('Z')];
+    const edges = [edge('e1', 'Door1', 'Z', 5), edge('e2', 'Door2', 'Z', 1)];
+    const path = dijkstraBetweenSets(nodes, edges, ['Door1', 'Door2'], new Set(['Z']), new Set());
+    expect(path).toEqual(['Door2', 'Z']);
+  });
+
+  it('picks the cheapest pair when both origin and destination are multi-entrance', () => {
+    //  A1 --1-- B1   (cost 1, cheapest)
+    //  A1 --9-- B2
+    //  A2 --9-- B1
+    //  A2 --9-- B2
+    const nodes = [node('A1'), node('A2'), node('B1'), node('B2')];
+    const edges = [
+      edge('e1', 'A1', 'B1', 1),
+      edge('e2', 'A1', 'B2', 9),
+      edge('e3', 'A2', 'B1', 9),
+      edge('e4', 'A2', 'B2', 9),
+    ];
+    const path = dijkstraBetweenSets(nodes, edges, ['A1', 'A2'], new Set(['B1', 'B2']), new Set());
+    expect(path).toEqual(['A1', 'B1']);
+  });
+
+  it('returns null when srcIds or targetIds is empty', () => {
+    const nodes = [node('A'), node('B')];
+    const edges = [edge('e1', 'A', 'B', 1)];
+    expect(dijkstraBetweenSets(nodes, edges, [], new Set(['B']), new Set())).toBeNull();
+    expect(dijkstraBetweenSets(nodes, edges, ['A'], new Set(), new Set())).toBeNull();
   });
 });

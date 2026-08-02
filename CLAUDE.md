@@ -63,6 +63,7 @@ src/
     geometry.ts              # hit detection, euclidean distance, norm/px conversion
     export.ts                # serialize/deserialize graph bundle (base64-in-JSON)
     pathfinding.ts           # Dijkstra algorithm (pure function, no React)
+    roomEntrances.ts         # room marker/entrance resolution (pure function, no React)
     pdf.ts                   # PDF import utility
     id.ts                    # ID generation (generateId wrapping crypto.randomUUID)
     imageStore.ts            # IndexedDB CRUD for section images (save/getAll/delete)
@@ -117,6 +118,9 @@ interface Node {
   isRoom: boolean;      // true = appears in navigator origin/destination dropdowns
   isConnector: boolean; // true = stairwell landing, elevator door, etc.
   category?: string;    // optional grouping for nearest-in-category routing
+  isRoomMarker?: boolean; // true = this room node's entrances are defined by its
+                         // "Room Entrance" edges rather than being routable itself —
+                         // see "Multi-entrance rooms" under Navigator mode
 }
 
 interface Edge {
@@ -174,6 +178,8 @@ Action types:
 - `UPDATE_EDGE_TYPE` — edit a custom or built-in edge type's name/weight/accessibility (recalculates weight for all edges using that type)
 - `DELETE_EDGE_TYPE` — remove a custom edge type (built-in types cannot be deleted); edges of that type are reassigned to `walkway`
 - `CALIBRATE_SECTION` — set `Section.scale` and recalculate all length-based edge weights for that section
+- `SET_ROOM_MARKER` — flag a room node as a marker; for each edge touching it, converts it to a `room-entrance` edge if the other endpoint isn't a room, or deletes it if the other endpoint is a room (lone room or another marker)
+- `UNSET_ROOM_MARKER` — un-flag a marker; its `room-entrance` edges revert to `walkway`, weight recalculated from distance
 - `LOAD_BUILDING` — replace entire state (used for import)
 
 ### Persistence: localStorage + IndexedDB
@@ -276,12 +282,38 @@ They are listed in the EditorSidebar under "Cross-section connections."
 The navigator supports two destination modes:
 
 - **Room** — origin and destination are selected from searchable dropdowns (`SearchableSelect`, `src/components/shared/`) populated with all nodes where `isRoom === true`, grouped by section name.
-- **Nearest in category** — destination is the closest node (by path weight) whose `category` matches the selected string. Uses `dijkstraToCategory()` in `src/utils/pathfinding.ts`.
+- **Nearest in category** — destination is the closest node (by path weight) whose `category` matches the selected string, expanding through any room marker to its entrances (see below). Resolved in `src/hooks/usePathfinder.ts` via `dijkstraBetweenSets()` in `src/utils/pathfinding.ts`.
 
 The user's current section view updates automatically to show the origin node's section when a selection is made.
 
 Rooms can also be picked directly on the map: clicking a room node opens a small context
 menu at the click point with "Set origin" / "Set destination" options (`NavigatorCanvas.tsx`).
+This works unchanged for room markers too — a marker is just another `isRoom` node from
+the click-handling code's point of view.
+
+**Multi-entrance rooms:** a room with several doors is represented by exactly one
+`isRoom` node flagged `isRoomMarker`, plus its doors as ordinary (non-`isRoom`) path
+nodes connected to it via `room-entrance` edges. In the Editor, drawing an edge with
+either endpoint on a marker auto-assigns this type regardless of the toolbar's current
+selection (two markers can't be connected to each other — that's refused entirely); see
+`resolveEdgeType()` in `EditorCanvas.tsx`. A marker's entrances are derived purely from
+its `room-entrance` edges — there is no separate list or collection.
+
+- **Browsing (no route shown):** only the marker is visible/clickable in Navigator —
+  its entrances were never `isRoom`, so they're invisible by the same rule that already
+  hides every non-room node while browsing.
+- **Routing:** selecting the room routes to whichever entrance is cheapest (entrances
+  are never free to move between each other — every candidate is still costed over the
+  real graph, via `dijkstraBetweenSets()`). That entrance then visually *becomes* the
+  room for the duration of the route (room styling, the marker's label), while the
+  marker itself hides — exactly one node ever represents a given room on screen at a
+  time. Unrelated rooms elsewhere are unaffected. See `src/utils/roomEntrances.ts`
+  (`resolveRoomCandidates()`, `findMarkerForEntrance()`) and the room-marker-specific
+  block in `useCanvasRenderer.ts`'s node-drawing logic (gated on a `isNavigator` param
+  the hook takes — Editor always renders every node/edge as-is, unaffected).
+- A marker with zero entrances can never be routed to; the Editor flags this with a red
+  warning ring on the node and a note in its label popup, so it's caught while
+  authoring rather than surfacing as a confusing "No route found" later.
 
 ### Responsive layout
 
@@ -366,9 +398,15 @@ app is insulated from this detail.
 | `stairs` | Coral `#D85A30` | Long dash `[12,6]` | 150 (fixed) | No |
 | `elevator` | Purple `#534AB7` | Short dash `[4,4]` | 300 (fixed) | Yes |
 | `ramp` | Teal `#1D9E75` | Long dash `[12,6]` | Euclidean × scale | Yes |
+| `room-entrance` | Grey `#8B8B8B` | Fine dots `[2,3]` | 0 (inert) | n/a |
 
 Accessibility filtering in the navigator excludes edge types where `isAccessible === false`
 (only `stairs` among the built-ins) when the "Accessible route" option is enabled.
+
+`room-entrance` is different from the other four: it's never manually selectable (no
+type-picker anywhere offers it), the editor auto-assigns it whenever an edge touches a
+room marker node, and it's excluded from pathfinding unconditionally — not tied to the
+accessibility toggle. See "Multi-entrance rooms" under Navigator mode.
 
 ### Custom types
 

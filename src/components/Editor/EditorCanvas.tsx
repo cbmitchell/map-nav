@@ -1,7 +1,7 @@
 import { useRef, useState, useLayoutEffect, useEffect } from 'react';
 import clsx from 'clsx';
 import type { Dispatch } from 'react';
-import type { Building, Node } from '../../types/graph';
+import type { Building, Node, EdgeType } from '../../types/graph';
 import type { EditorState } from '../../types/editor';
 import type { Action } from '../../hooks/useGraphReducer';
 import type { ZoomPanState } from '../../hooks/useZoomPan';
@@ -10,6 +10,7 @@ import { useCanvasRenderer } from '../../hooks/useCanvasRenderer';
 import { distanceToSegment, px2norm, closestPointOnSegment } from '../../utils/geometry';
 import { computeEdgeWeight } from '../../utils/pathfinding';
 import { euclideanWeight } from '../../utils/geometry';
+import { ROOM_ENTRANCE_EDGE_TYPE } from '../../utils/roomEntrances';
 import { useMobile } from '../../hooks/useMobile';
 import { generateId } from '../../utils/id';
 import popupStyles from './EditorCanvas.module.css';
@@ -26,6 +27,7 @@ interface LabelEditorState {
   isRoom: boolean;
   isConnector: boolean;
   category: string;
+  isRoomMarker: boolean;
 }
 
 interface EdgeEditorState {
@@ -285,6 +287,7 @@ export function EditorCanvas({
         isRoom: node.isRoom,
         isConnector: node.isConnector,
         category: node.category ?? '',
+        isRoomMarker: node.isRoomMarker ?? false,
       });
       return true;
     }
@@ -303,6 +306,18 @@ export function EditorCanvas({
     const prevX = prevNode.nx * W;
     const prevY = prevNode.ny * H;
     return Math.abs(x - prevX) >= Math.abs(y - prevY) ? { x, y: prevY } : { x: prevX, y };
+  }
+
+  // An edge touching a room marker is always a "Room Entrance" edge, regardless of
+  // whatever type is selected in the toolbar — never a manual choice. Two markers
+  // can't be connected to each other (a room can't be another room's entrance), so
+  // that case is refused entirely (returns null; caller should cancel, not dispatch).
+  function resolveEdgeType(srcNode: Node, tgtNode: Node, requestedType: EdgeType): EdgeType | null {
+    const srcIsMarker = !!srcNode.isRoomMarker;
+    const tgtIsMarker = !!tgtNode.isRoomMarker;
+    if (srcIsMarker && tgtIsMarker) return null;
+    if (srcIsMarker || tgtIsMarker) return ROOM_ENTRANCE_EDGE_TYPE;
+    return requestedType;
   }
 
   // Node mode: places a new unlabeled node at the tap point, or splits an existing
@@ -339,6 +354,7 @@ export function EditorCanvas({
     const edgeNodeIndex = new Map(buildingRef.current.nodes.map((n) => [n.id, n]));
     let split = false;
     for (const edge of sectionEdges) {
+      if (edge.type === ROOM_ENTRANCE_EDGE_TYPE) continue; // not spatial — not splittable
       const edgeSrc = edgeNodeIndex.get(edge.srcId)!;
       const edgeTgt = edgeNodeIndex.get(edge.tgtId)!;
       const { x: esx, y: esy } = contentToScreen(edgeSrc.nx * W, edgeSrc.ny * H);
@@ -365,15 +381,17 @@ export function EditorCanvas({
           const imgW = activeSection?.imageW ?? W;
           const imgH = activeSection?.imageH ?? H;
           const sectionScale = activeSection?.scale ?? 1.0;
-          const type = es.currentEdgeType;
-          const typeDef = buildingRef.current.edgeTypes.find((t) => t.id === type);
-          const weight = typeDef
-            ? computeEdgeWeight(typeDef, prevNode, newNode, imgW, imgH, sectionScale)
-            : euclideanWeight(prevNode, newNode, imgW, imgH) * sectionScale;
-          dispatch({
-            type: 'ADD_EDGE',
-            payload: { srcId: es.lastPathNodeId, tgtId: newNode.id, type, weight, crossSection: false },
-          });
+          const type = resolveEdgeType(prevNode, newNode, es.currentEdgeType);
+          if (type) {
+            const typeDef = buildingRef.current.edgeTypes.find((t) => t.id === type);
+            const weight = typeDef
+              ? computeEdgeWeight(typeDef, prevNode, newNode, imgW, imgH, sectionScale)
+              : euclideanWeight(prevNode, newNode, imgW, imgH) * sectionScale;
+            dispatch({
+              type: 'ADD_EDGE',
+              payload: { srcId: es.lastPathNodeId, tgtId: newNode.id, type, weight, crossSection: false },
+            });
+          }
         }
       }
       onEditorStateChange({ lastPathNodeId: newNode.id, mousePos: null });
@@ -402,19 +420,21 @@ export function EditorCanvas({
       }
       const srcNode = nodeIndex.get(es.pendingEdgeSrcId);
       if (!srcNode) return true;
-      const type = es.currentEdgeType;
-      const typeDef = buildingRef.current.edgeTypes.find((t) => t.id === type);
-      const activeSection = buildingRef.current.sections.find((s) => s.id === activeSectionIdRef.current);
-      const imgW = activeSection?.imageW ?? W;
-      const imgH = activeSection?.imageH ?? H;
-      const sectionScale = activeSection?.scale ?? 1.0;
-      const weight = typeDef
-        ? computeEdgeWeight(typeDef, srcNode, node, imgW, imgH, sectionScale)
-        : euclideanWeight(srcNode, node, imgW, imgH) * sectionScale;
-      dispatch({
-        type: 'ADD_EDGE',
-        payload: { srcId: es.pendingEdgeSrcId, tgtId: node.id, type, weight, crossSection: false },
-      });
+      const type = resolveEdgeType(srcNode, node, es.currentEdgeType);
+      if (type) {
+        const typeDef = buildingRef.current.edgeTypes.find((t) => t.id === type);
+        const activeSection = buildingRef.current.sections.find((s) => s.id === activeSectionIdRef.current);
+        const imgW = activeSection?.imageW ?? W;
+        const imgH = activeSection?.imageH ?? H;
+        const sectionScale = activeSection?.scale ?? 1.0;
+        const weight = typeDef
+          ? computeEdgeWeight(typeDef, srcNode, node, imgW, imgH, sectionScale)
+          : euclideanWeight(srcNode, node, imgW, imgH) * sectionScale;
+        dispatch({
+          type: 'ADD_EDGE',
+          payload: { srcId: es.pendingEdgeSrcId, tgtId: node.id, type, weight, crossSection: false },
+        });
+      }
       onEditorStateChange({ pendingEdgeSrcId: null });
       return true;
     }
@@ -431,13 +451,16 @@ export function EditorCanvas({
     for (const node of sectionNodes) {
       if (!hitNodeScreen(screenX, screenY, node)) continue;
       if (!node.isConnector) return true; // only connector nodes can be cross-section targets
-      const type = es.currentEdgeType;
-      const typeDef = buildingRef.current.edgeTypes.find((t) => t.id === type);
-      const weight = typeDef?.weightMode === 'fixed' ? typeDef.fixedWeight : 100;
-      dispatch({
-        type: 'ADD_EDGE',
-        payload: { srcId: es.pendingLinkSrc.nodeId, tgtId: node.id, type, weight, crossSection: true },
-      });
+      const srcNode = buildingRef.current.nodes.find((n) => n.id === es.pendingLinkSrc!.nodeId);
+      const type = srcNode ? resolveEdgeType(srcNode, node, es.currentEdgeType) : es.currentEdgeType;
+      if (type) {
+        const typeDef = buildingRef.current.edgeTypes.find((t) => t.id === type);
+        const weight = typeDef?.weightMode === 'fixed' ? typeDef.fixedWeight : 100;
+        dispatch({
+          type: 'ADD_EDGE',
+          payload: { srcId: es.pendingLinkSrc.nodeId, tgtId: node.id, type, weight, crossSection: true },
+        });
+      }
       onEditorStateChange({ mode: 'select', pendingLinkSrc: null });
       return true;
     }
@@ -814,6 +837,34 @@ export function EditorCanvas({
     setLabelEditor(null);
   };
 
+  // Marking/unmarking a room marker acts immediately (independent of the popup's Save
+  // button) since it's a distinct, consequential action — marking cascades into a
+  // confirmed edge conversion/deletion, so it gets its own explicit confirmation
+  // moment rather than being silently bundled into an unrelated field's Save.
+  const handleToggleMarker = (checked: boolean) => {
+    if (!labelEditor) return;
+    const nodeId = labelEditor.nodeId;
+    if (!checked) {
+      dispatch({ type: 'UNSET_ROOM_MARKER', payload: { nodeId } });
+      setLabelEditor({ ...labelEditor, isRoomMarker: false });
+      return;
+    }
+    const roomIds = new Set(buildingRef.current.nodes.filter((n) => n.isRoom).map((n) => n.id));
+    const touching = buildingRef.current.edges.filter((e) => e.srcId === nodeId || e.tgtId === nodeId);
+    const toConvert = touching.filter((e) => !roomIds.has(e.srcId === nodeId ? e.tgtId : e.srcId)).length;
+    const toDelete = touching.length - toConvert;
+    const parts: string[] = [];
+    if (toConvert > 0) parts.push(`convert ${toConvert} edge${toConvert === 1 ? '' : 's'} to room entrances`);
+    if (toDelete > 0) parts.push(`delete ${toDelete} edge${toDelete === 1 ? '' : 's'} to other rooms`);
+    const detail = parts.length ? ` This will ${parts.join(' and ')}.` : '';
+    const confirmed = window.confirm(
+      `Make this node a room marker?${detail} It will be removed from the pathfinding graph, and its label/category will be used for whichever entrance is selected when routing to this room.`,
+    );
+    if (!confirmed) return;
+    dispatch({ type: 'SET_ROOM_MARKER', payload: { nodeId } });
+    setLabelEditor({ ...labelEditor, isRoomMarker: true });
+  };
+
   // ---------------------------------------------------------------------------
   // Calibration
   // ---------------------------------------------------------------------------
@@ -918,6 +969,7 @@ export function EditorCanvas({
                 <input
                   type="checkbox"
                   checked={labelEditor.isRoom}
+                  disabled={labelEditor.isRoomMarker}
                   onChange={(ev) => setLabelEditor({ ...labelEditor, isRoom: ev.target.checked })}
                 />
                 <span>Is room</span>
@@ -948,6 +1000,26 @@ export function EditorCanvas({
                 <span>Is connector</span>
               </label>
             </div>
+            {labelEditor.isRoom && (
+              <div className={popupStyles.popupRow}>
+                <label className={popupStyles.checkLabel}>
+                  <input
+                    type="checkbox"
+                    checked={labelEditor.isRoomMarker}
+                    onChange={(ev) => handleToggleMarker(ev.target.checked)}
+                  />
+                  <span>Room marker</span>
+                </label>
+              </div>
+            )}
+            {labelEditor.isRoomMarker &&
+              !buildingRef.current.edges.some(
+                (e) => e.type === ROOM_ENTRANCE_EDGE_TYPE && (e.srcId === labelEditor.nodeId || e.tgtId === labelEditor.nodeId),
+              ) && (
+                <div className={popupStyles.popupWarning}>
+                  No entrances — this room can't be routed to.
+                </div>
+              )}
             <div className={popupStyles.popupActions}>
               <button className={popupStyles.popupBtn} onClick={() => setLabelEditor(null)}>Cancel</button>
               <button className={clsx(popupStyles.popupBtn, popupStyles.popupBtnPrimary)} onClick={submitLabelEditor}>
@@ -971,7 +1043,7 @@ export function EditorCanvas({
           >
             {isSmall && <div className={popupStyles.dragHandle} />}
             <div className={popupStyles.edgeTypeBtnRow}>
-              {building.edgeTypes.map((typeDef) => {
+              {building.edgeTypes.filter((t) => t.id !== ROOM_ENTRANCE_EDGE_TYPE).map((typeDef) => {
                 const currentEdge = building.edges.find((e) => e.id === edgeEditor.edgeId);
                 const isActive = currentEdge?.type === typeDef.id;
                 return (

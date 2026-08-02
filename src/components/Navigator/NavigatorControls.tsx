@@ -18,6 +18,8 @@ interface NavigatorControlsProps {
   path: string[] | null;
   error: string | null;
   resolvedTgtLabel: string | null;
+  originLabel?: string | null;
+  destinationLabel?: string | null;
   activeSectionId: string | null;
   onSrcChange: (id: string | null) => void;
   onTgtChange: (id: string | null) => void;
@@ -39,6 +41,8 @@ export function NavigatorControls({
   path,
   error,
   resolvedTgtLabel,
+  originLabel,
+  destinationLabel,
   activeSectionId,
   onSrcChange,
   onTgtChange,
@@ -212,7 +216,12 @@ export function NavigatorControls({
         <span>Show directions</span>
       </label>
       {showDirections && path && path.length > 0 && (
-        <DirectionsPanel building={building} path={path} />
+        <DirectionsPanel
+          building={building}
+          path={path}
+          originLabel={originLabel}
+          destinationLabel={destinationLabel}
+        />
       )}
     </div>
   );

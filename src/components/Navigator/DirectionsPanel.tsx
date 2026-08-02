@@ -5,6 +5,12 @@ import styles from './DirectionsPanel.module.css';
 interface DirectionsPanelProps {
   building: Building;
   path: string[];
+  // Overrides for the Start/Arrive lines when the origin/destination resolved to a
+  // room marker's entrance — shows the marker's own label instead of the entrance
+  // node's (usually blank) label, since the entrance is just an implementation detail
+  // of routing to the room.
+  originLabel?: string | null;
+  destinationLabel?: string | null;
 }
 
 interface WaypointStep {
@@ -12,7 +18,7 @@ interface WaypointStep {
   kind: 'start' | 'arrive' | 'transition' | 'waypoint';
 }
 
-export function DirectionsPanel({ building, path }: DirectionsPanelProps) {
+export function DirectionsPanel({ building, path, originLabel, destinationLabel }: DirectionsPanelProps) {
   const nodeIndex = new Map(building.nodes.map((n) => [n.id, n]));
   const sectionIndex = new Map(building.sections.map((s) => [s.id, s]));
 
@@ -30,12 +36,12 @@ export function DirectionsPanel({ building, path }: DirectionsPanelProps) {
     if (!node) continue;
 
     if (i === 0) {
-      steps.push({ kind: 'start', label: `Start at ${node.label || '(origin)'}` });
+      steps.push({ kind: 'start', label: `Start at ${originLabel || node.label || '(origin)'}` });
       continue;
     }
 
     if (i === path.length - 1) {
-      steps.push({ kind: 'arrive', label: `Arrive at ${node.label || '(destination)'}` });
+      steps.push({ kind: 'arrive', label: `Arrive at ${destinationLabel || node.label || '(destination)'}` });
       continue;
     }
 

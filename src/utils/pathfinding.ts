@@ -46,6 +46,21 @@ export const DEFAULT_EDGE_TYPES: EdgeTypeDef[] = [
     isAccessible: true,
     isBuiltIn: true,
   },
+  {
+    // Never manually selectable — the editor auto-assigns this type whenever an edge
+    // touches a room marker node. Always excluded from pathfinding (see
+    // src/utils/roomEntrances.ts), so weightMode/fixedWeight/isAccessible below are
+    // inert placeholders, never actually read for routing purposes.
+    id: 'room-entrance',
+    name: 'Room Entrance',
+    color: '#8B8B8B',
+    dashPattern: [2, 3],
+    weightMode: 'fixed',
+    fixedWeight: 0,
+    lengthScalar: 1.0,
+    isAccessible: true,
+    isBuiltIn: true,
+  },
 ];
 
 export const CUSTOM_TYPE_COLORS = [
@@ -188,4 +203,47 @@ export function dijkstraToCategory(
 
   const adj = buildAdjacency(nodes, edges, excludedTypes);
   return runDijkstra(nodes, adj, srcId, (id) => categoryNodeIds.has(id));
+}
+
+function pathWeight(edges: Edge[], path: string[]): number {
+  const edgeIndex = new Map<string, number>();
+  for (const e of edges) {
+    edgeIndex.set(`${e.srcId}|${e.tgtId}`, e.weight);
+    edgeIndex.set(`${e.tgtId}|${e.srcId}`, e.weight);
+  }
+  let total = 0;
+  for (let i = 0; i < path.length - 1; i++) {
+    total += edgeIndex.get(`${path[i]}|${path[i + 1]}`) ?? 0;
+  }
+  return total;
+}
+
+/**
+ * Finds the cheapest path between any node in srcIds and any node in targetIds.
+ * Used to route to/from a room whose selection resolves to multiple candidate nodes
+ * (e.g. a room marker's entrances) without ever treating those candidates as free to
+ * move between — every candidate path is still costed over the real graph edges.
+ */
+export function dijkstraBetweenSets(
+  nodes: Node[],
+  edges: Edge[],
+  srcIds: string[],
+  targetIds: Set<string>,
+  excludedTypes: Set<string>,
+): string[] | null {
+  if (srcIds.length === 0 || targetIds.size === 0) return null;
+  const adj = buildAdjacency(nodes, edges, excludedTypes);
+  let best: string[] | null = null;
+  let bestWeight = Infinity;
+  for (const srcId of srcIds) {
+    if (targetIds.has(srcId)) return [srcId];
+    const path = runDijkstra(nodes, adj, srcId, (id) => targetIds.has(id));
+    if (!path) continue;
+    const w = pathWeight(edges, path);
+    if (w < bestWeight) {
+      bestWeight = w;
+      best = path;
+    }
+  }
+  return best;
 }

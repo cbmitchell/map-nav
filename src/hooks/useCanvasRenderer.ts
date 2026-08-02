@@ -5,6 +5,7 @@ import type { EditorState } from '../types/editor';
 import { DEFAULT_EDITOR_STATE } from '../types/editor';
 import type { ZoomPanState } from './useZoomPan';
 import { DEFAULT_ZOOM_PAN } from './useZoomPan';
+import { ROOM_ENTRANCE_EDGE_TYPE, findMarkerForEntrance } from '../utils/roomEntrances';
 
 // ---------------------------------------------------------------------------
 // Edge display helpers (derived from building.edgeTypes at render time)
@@ -34,6 +35,7 @@ export function useCanvasRenderer(
   zoomPan: ZoomPanState = DEFAULT_ZOOM_PAN,
   highlightPath: string[] | null = null,
   roomsOnly = false,
+  isNavigator = false,
 ) {
   const buildingRef = useRef(building);
   const activeSectionIdRef = useRef(activeSectionId);
@@ -41,6 +43,7 @@ export function useCanvasRenderer(
   const zoomPanRef = useRef(zoomPan);
   const highlightPathRef = useRef(highlightPath);
   const roomsOnlyRef = useRef(roomsOnly);
+  const isNavigatorRef = useRef(isNavigator);
   const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
   const redrawRef = useRef<() => void>(() => {});
 
@@ -51,6 +54,7 @@ export function useCanvasRenderer(
     zoomPanRef.current = zoomPan;
     highlightPathRef.current = highlightPath;
     roomsOnlyRef.current = roomsOnly;
+    isNavigatorRef.current = isNavigator;
   });
 
   const redraw = useCallback(() => {
@@ -67,6 +71,7 @@ export function useCanvasRenderer(
     const { scale, panX, panY } = zoomPanRef.current;
     const path = highlightPathRef.current;
     const roomsOnly = roomsOnlyRef.current;
+    const isNavigator = isNavigatorRef.current;
 
     // On mobile the canvas may be taller than the image aspect ratio (fills the screen).
     // Content coordinates are always bounded by the image's natural aspect ratio.
@@ -129,6 +134,7 @@ export function useCanvasRenderer(
 
     const sectionEdges = building.edges.filter((e) => {
       if (e.crossSection) return false;
+      if (isNavigator && e.type === ROOM_ENTRANCE_EDGE_TYPE) return false; // organizational only
       return (
         nodeIndex.has(e.srcId) &&
         nodeIndex.has(e.tgtId) &&
@@ -179,8 +185,29 @@ export function useCanvasRenderer(
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Edge weight label (editor only)
-      if (!isPathMode) {
+      // Directional arrowhead for Room Entrance edges (marker → entrance), editor
+      // only — Navigator never draws these edges at all (filtered out above).
+      if (edge.type === ROOM_ENTRANCE_EDGE_TYPE && !isNavigator) {
+        const markerIsSrc = !!src.isRoomMarker;
+        const fromX = markerIsSrc ? sx : tx;
+        const fromY = markerIsSrc ? sy : ty;
+        const toX = markerIsSrc ? tx : sx;
+        const toY = markerIsSrc ? ty : sy;
+        const angle = Math.atan2(toY - fromY, toX - fromX);
+        const arrowLen = 9;
+        const arrowAngle = Math.PI / 7;
+        ctx.beginPath();
+        ctx.moveTo(toX, toY);
+        ctx.lineTo(toX - arrowLen * Math.cos(angle - arrowAngle), toY - arrowLen * Math.sin(angle - arrowAngle));
+        ctx.moveTo(toX, toY);
+        ctx.lineTo(toX - arrowLen * Math.cos(angle + arrowAngle), toY - arrowLen * Math.sin(angle + arrowAngle));
+        ctx.strokeStyle = edgeLookups.colors[edge.type] ?? '#888';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      // Edge weight label (editor only) — skipped for Room Entrance, weight is inert
+      if (!isPathMode && edge.type !== ROOM_ENTRANCE_EDGE_TYPE) {
         const mx = (sx + tx) / 2;
         const my = (sy + ty) / 2;
         const weightLabel = Math.round(edge.weight).toString();
@@ -308,9 +335,41 @@ export function useCanvasRenderer(
       ctx.stroke();
     }
 
+    // Room marker impersonation: while routing, the resolved entrance visually
+    // becomes the room it belongs to (marker's label/styling), and the marker itself
+    // hides — but only for the marker(s) actually tied to this path's endpoints;
+    // unrelated markers elsewhere are unaffected.
+    const entranceOverrides = new Map<string, typeof sectionNodes[number]>(); // entranceId -> marker
+    const hiddenMarkerIds = new Set<string>();
+    if (isNavigator && path && path.length > 0) {
+      for (const entranceId of [path[0], path[path.length - 1]]) {
+        const marker = findMarkerForEntrance(building.nodes, building.edges, entranceId);
+        if (marker) {
+          entranceOverrides.set(entranceId, marker);
+          hiddenMarkerIds.add(marker.id);
+        }
+      }
+    }
+
+    // Editor-only: markers with zero entrances can never be routed to — flag them
+    // with a warning ring so the mapmaker notices before a user hits "No route found."
+    const unreachableMarkerIds = new Set<string>();
+    if (!isNavigator) {
+      const markerEntranceCounts = new Map<string, number>();
+      for (const e of building.edges) {
+        if (e.type !== ROOM_ENTRANCE_EDGE_TYPE) continue;
+        markerEntranceCounts.set(e.srcId, (markerEntranceCounts.get(e.srcId) ?? 0) + 1);
+        markerEntranceCounts.set(e.tgtId, (markerEntranceCounts.get(e.tgtId) ?? 0) + 1);
+      }
+      for (const n of sectionNodes) {
+        if (n.isRoomMarker && !markerEntranceCounts.get(n.id)) unreachableMarkerIds.add(n.id);
+      }
+    }
+
     // 5. Nodes
     const drawNode = (node: typeof sectionNodes[number], isPath: boolean) => {
       const { x, y } = toScreen(node.nx * W, node.ny * contentH);
+      const overrideMarker = entranceOverrides.get(node.id);
 
       const hasCrossSection = crossSectionNodeIds.has(node.id);
       if (hasCrossSection && !isPathMode) {
@@ -332,9 +391,18 @@ export function useCanvasRenderer(
         ctx.stroke();
       }
 
+      if (unreachableMarkerIds.has(node.id)) {
+        ctx.beginPath();
+        ctx.arc(x, y, 15, 0, Math.PI * 2);
+        ctx.strokeStyle = '#E74C3C';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
       let fillColor: string;
       if (node.id === es.selectedNodeId) fillColor = '#7C3AED';
       else if (node.id === es.pendingEdgeSrcId) fillColor = '#F97316';
+      else if (overrideMarker) fillColor = '#1D9E75';
       else if (node.isConnector) fillColor = '#EF9F27';
       else if (node.isRoom) fillColor = '#1D9E75';
       else fillColor = '#378ADD';
@@ -347,28 +415,31 @@ export function useCanvasRenderer(
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      // Node label
-      if (node.label) {
+      // Node label — substituted with the marker's label while this node is
+      // impersonating the room it's an entrance of.
+      const displayLabel = overrideMarker?.label || node.label;
+      if (displayLabel) {
         ctx.font = '12px system-ui, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
-        const labelW = ctx.measureText(node.label).width;
+        const labelW = ctx.measureText(displayLabel).width;
         const pad = 3;
         const labelX = x - labelW / 2 - pad;
         const labelY = y + 12;
         ctx.fillStyle = 'rgba(0,0,0,0.65)';
         ctx.fillRect(labelX, labelY, labelW + pad * 2, 16);
         ctx.fillStyle = isPath ? PATH_COLOR : '#fff';
-        ctx.fillText(node.label, x, labelY + 2);
+        ctx.fillText(displayLabel, x, labelY + 2);
       }
     };
 
     if (isPathMode) {
       const isSignificantNode = (n: typeof sectionNodes[number]) =>
-        n.isRoom || n.isConnector || n.label !== '';
-      // Off-path connectors stay hidden — only rooms/labeled nodes are shown dimmed
-      const isDimEligible = (n: typeof sectionNodes[number]) =>
-        !n.isConnector && (n.isRoom || n.label !== '');
+        n.isRoom || n.isConnector || n.label !== '' || entranceOverrides.has(n.id);
+      // Off-path nodes are only shown (dimmed) if they're rooms — except a room
+      // marker currently being impersonated by its resolved entrance, which hides
+      // entirely so only one node ever represents a given room on screen at a time.
+      const isDimEligible = (n: typeof sectionNodes[number]) => n.isRoom && !hiddenMarkerIds.has(n.id);
       ctx.globalAlpha = NODE_DIM_ALPHA;
       for (const node of sectionNodes) {
         if (!pathNodeSet!.has(node.id) && isDimEligible(node)) drawNode(node, false);
@@ -391,7 +462,7 @@ export function useCanvasRenderer(
 
   useEffect(() => {
     redraw();
-  }, [redraw, building, activeSectionId, editorState, zoomPan, highlightPath, roomsOnly]);
+  }, [redraw, building, activeSectionId, editorState, zoomPan, highlightPath, roomsOnly, isNavigator]);
 
   return { redraw };
 }

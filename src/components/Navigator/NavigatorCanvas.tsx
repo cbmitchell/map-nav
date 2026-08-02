@@ -88,6 +88,7 @@ export function NavigatorCanvas({
     zoomPan,
     path,
     path === null,
+    true,
   );
 
   // Canvas sizing

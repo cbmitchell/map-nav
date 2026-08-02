@@ -39,6 +39,8 @@ export interface Node {
   isRoom: boolean;
   isConnector: boolean;
   category?: string;
+  isRoomMarker?: boolean; // true = this room node's entrances are defined by its
+                          // "Room Entrance" edges rather than being routable itself
 }
 
 export interface Edge {

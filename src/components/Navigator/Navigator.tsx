@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import type { Building } from '../../types/graph';
 import styles from './Navigator.module.css';
 import { usePathfinder } from '../../hooks/usePathfinder';
+import { findMarkerForEntrance } from '../../utils/roomEntrances';
 import { useZoomPan, DEFAULT_ZOOM_PAN } from '../../hooks/useZoomPan';
 import type { ZoomPanState } from '../../hooks/useZoomPan';
 import { NavigatorControls } from './NavigatorControls';
@@ -62,6 +63,20 @@ export function Navigator({ state }: NavigatorProps) {
     setTgtCategory(cat);
     setTgtId(null);
   }, []);
+
+  // When the path's origin/destination is a room marker's entrance, the entrance
+  // visually impersonates the room in the canvas — the Directions panel should show
+  // the marker's own label at Start/Arrive too, not the entrance's (usually blank) one.
+  // A lone room (no marker) has no Room Entrance edge, so this naturally resolves to
+  // null and falls back to the node's own real label.
+  const originLabel = useMemo(() => {
+    if (!path || path.length === 0) return null;
+    return findMarkerForEntrance(state.nodes, state.edges, path[0])?.label ?? null;
+  }, [path, state.nodes, state.edges]);
+  const destinationLabel = useMemo(() => {
+    if (!path || path.length === 0) return null;
+    return findMarkerForEntrance(state.nodes, state.edges, path[path.length - 1])?.label ?? null;
+  }, [path, state.nodes, state.edges]);
 
   // When routing by category, resolve the destination room name from the path's last node
   const resolvedTgtLabel = useMemo(() => {
@@ -131,6 +146,8 @@ export function Navigator({ state }: NavigatorProps) {
           path={path}
           error={error}
           resolvedTgtLabel={resolvedTgtLabel}
+          originLabel={originLabel}
+          destinationLabel={destinationLabel}
           onSrcChange={handleSrcChange}
           onTgtChange={handleTgtChange}
           onTgtCategoryChange={handleTgtCategoryChange}

@@ -2,6 +2,7 @@ import { useReducer, useEffect, useLayoutEffect, useRef, useCallback, useState }
 import type { Building, Section, Node, Edge, EdgeTypeDef } from '../types/graph';
 import { euclideanWeight } from '../utils/geometry';
 import { DEFAULT_EDGE_TYPES, CUSTOM_TYPE_COLORS, computeEdgeWeight } from '../utils/pathfinding';
+import { ROOM_ENTRANCE_EDGE_TYPE } from '../utils/roomEntrances';
 import { generateId } from '../utils/id';
 import { saveImage, getAllImages, deleteImage } from '../utils/imageStore';
 
@@ -26,6 +27,8 @@ export type Action =
   | { type: 'UPDATE_EDGE_TYPE'; payload: Omit<EdgeTypeDef, 'id' | 'color' | 'dashPattern' | 'isBuiltIn'> & { id: string } }
   | { type: 'DELETE_EDGE_TYPE'; payload: { id: string } }
   | { type: 'CALIBRATE_SECTION'; payload: { sectionId: string; scale: number } }
+  | { type: 'SET_ROOM_MARKER'; payload: { nodeId: string } }
+  | { type: 'UNSET_ROOM_MARKER'; payload: { nodeId: string } }
   | { type: 'LOAD_BUILDING'; payload: Building };
 
 // ---------------------------------------------------------------------------
@@ -320,6 +323,51 @@ function reducer(state: Building, action: Action): Building {
       return {
         ...state,
         sections: state.sections.map((s) => (s.id === sectionId ? { ...s, scale } : s)),
+        edges: updatedEdges,
+      };
+    }
+
+    case 'SET_ROOM_MARKER': {
+      const { nodeId } = action.payload;
+      const node = state.nodes.find((n) => n.id === nodeId);
+      if (!node?.isRoom) return state;
+      const roomIds = new Set(state.nodes.filter((n) => n.isRoom).map((n) => n.id));
+      const updatedEdges = state.edges
+        .filter((e) => {
+          if (e.srcId !== nodeId && e.tgtId !== nodeId) return true;
+          const otherId = e.srcId === nodeId ? e.tgtId : e.srcId;
+          return !roomIds.has(otherId); // drop edges to other rooms — can't be entrances
+        })
+        .map((e) => {
+          if (e.srcId !== nodeId && e.tgtId !== nodeId) return e;
+          return { ...e, type: ROOM_ENTRANCE_EDGE_TYPE, weight: 0 };
+        });
+      return {
+        ...state,
+        nodes: state.nodes.map((n) => (n.id === nodeId ? { ...n, isRoomMarker: true } : n)),
+        edges: updatedEdges,
+      };
+    }
+
+    case 'UNSET_ROOM_MARKER': {
+      const { nodeId } = action.payload;
+      const nodeIndex = new Map(state.nodes.map((n) => [n.id, n]));
+      const walkway = state.edgeTypes.find((t) => t.id === 'walkway');
+      const updatedEdges = state.edges.map((e) => {
+        if (e.type !== ROOM_ENTRANCE_EDGE_TYPE || (e.srcId !== nodeId && e.tgtId !== nodeId)) return e;
+        const src = nodeIndex.get(e.srcId);
+        const tgt = nodeIndex.get(e.tgtId);
+        if (!src || !tgt || !walkway) return { ...e, type: 'walkway' };
+        const section = state.sections.find((s) => s.id === src.sectionId);
+        const weight =
+          euclideanWeight(src, tgt, section?.imageW ?? 1, section?.imageH ?? 1) *
+          walkway.lengthScalar *
+          (section?.scale ?? 1.0);
+        return { ...e, type: 'walkway', weight };
+      });
+      return {
+        ...state,
+        nodes: state.nodes.map((n) => (n.id === nodeId ? { ...n, isRoomMarker: false } : n)),
         edges: updatedEdges,
       };
     }

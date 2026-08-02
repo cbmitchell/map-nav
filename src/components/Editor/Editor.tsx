@@ -4,6 +4,7 @@ import type { Building } from '../../types/graph';
 import type { Action } from '../../hooks/useGraphReducer';
 import { useZoomPan, DEFAULT_ZOOM_PAN } from '../../hooks/useZoomPan';
 import { useMobile } from '../../hooks/useMobile';
+import { ROOM_ENTRANCE_EDGE_TYPE } from '../../utils/roomEntrances';
 import styles from './Editor.module.css';
 import type { ZoomPanState } from '../../hooks/useZoomPan';
 import { DEFAULT_EDITOR_STATE } from '../../types/editor';
@@ -99,9 +100,9 @@ export function Editor({ state, dispatch, undo, storageError }: EditorProps) {
         return;
       }
 
-      // 1–N — switch edge type
+      // 1–N — switch edge type (Room Entrance is never manually selectable)
       const idx = parseInt(e.key) - 1;
-      const edgeTypes = edgeTypesRef.current;
+      const edgeTypes = edgeTypesRef.current.filter((t) => t.id !== ROOM_ENTRANCE_EDGE_TYPE);
       if (!isNaN(idx) && idx >= 0 && idx < edgeTypes.length && !e.ctrlKey && !e.metaKey) {
         setEditorState((prev) => ({ ...prev, currentEdgeType: edgeTypes[idx].id }));
       }
