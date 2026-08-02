@@ -7,7 +7,7 @@ import type { Action } from '../../hooks/useGraphReducer';
 import type { ZoomPanState } from '../../hooks/useZoomPan';
 import { screenToCanvas } from '../../hooks/useZoomPan';
 import { useCanvasRenderer } from '../../hooks/useCanvasRenderer';
-import { distanceToSegment, px2norm } from '../../utils/geometry';
+import { distanceToSegment, px2norm, closestPointOnSegment } from '../../utils/geometry';
 import { computeEdgeWeight } from '../../utils/pathfinding';
 import { euclideanWeight } from '../../utils/geometry';
 import { useMobile } from '../../hooks/useMobile';
@@ -344,7 +344,11 @@ export function EditorCanvas({
       const { x: esx, y: esy } = contentToScreen(edgeSrc.nx * W, edgeSrc.ny * H);
       const { x: etx, y: ety } = contentToScreen(edgeTgt.nx * W, edgeTgt.ny * H);
       if (distanceToSegment(tapScreenX, tapScreenY, esx, esy, etx, ety) < 8) {
-        dispatch({ type: 'SPLIT_EDGE', payload: { edgeId: edge.id, nx: clamped.x, ny: clamped.y, newNodeId: newNode.id }, canvasW: W, canvasH: H });
+        const onEdge = closestPointOnSegment(x, y, edgeSrc.nx * W, edgeSrc.ny * H, edgeTgt.nx * W, edgeTgt.ny * H);
+        const onEdgeNorm = px2norm(onEdge.x, onEdge.y, W, H);
+        newNode.nx = onEdgeNorm.x;
+        newNode.ny = onEdgeNorm.y;
+        dispatch({ type: 'SPLIT_EDGE', payload: { edgeId: edge.id, nx: onEdgeNorm.x, ny: onEdgeNorm.y, newNodeId: newNode.id }, canvasW: W, canvasH: H });
         split = true;
         break;
       }

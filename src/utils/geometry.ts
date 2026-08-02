@@ -44,6 +44,22 @@ export function hitTestNode(
   return Math.hypot(mouseX - x, mouseY - y) < HIT_RADIUS;
 }
 
+export function closestPointOnSegment(
+  px: number,
+  py: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+): { x: number; y: number } {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return { x: x1, y: y1 };
+  const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lenSq));
+  return { x: x1 + t * dx, y: y1 + t * dy };
+}
+
 export function distanceToSegment(
   px: number,
   py: number,
@@ -52,10 +68,6 @@ export function distanceToSegment(
   x2: number,
   y2: number,
 ): number {
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const lenSq = dx * dx + dy * dy;
-  if (lenSq === 0) return Math.hypot(px - x1, py - y1);
-  const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lenSq));
-  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+  const pt = closestPointOnSegment(px, py, x1, y1, x2, y2);
+  return Math.hypot(px - pt.x, py - pt.y);
 }
