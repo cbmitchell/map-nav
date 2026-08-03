@@ -234,16 +234,15 @@ export function useCanvasRenderer(
     };
 
     if (isPathMode) {
+      // On-path edges are drawn later (see the Nodes section below), after the dimmed
+      // off-path nodes — otherwise a dense cluster of dimmed nodes can visually bury
+      // the highlighted route line when zoomed out.
       ctx.globalAlpha = DIM_ALPHA;
       for (const edge of sectionEdges) {
         const onPath = pathEdgePairs.has(`${edge.srcId}|${edge.tgtId}`);
         if (!onPath) drawEdge(edge, false);
       }
       ctx.globalAlpha = 1;
-      for (const edge of sectionEdges) {
-        const onPath = pathEdgePairs.has(`${edge.srcId}|${edge.tgtId}`);
-        if (onPath) drawEdge(edge, true);
-      }
     } else if (!roomsOnly) {
       for (const edge of sectionEdges) drawEdge(edge, false);
     }
@@ -457,6 +456,12 @@ export function useCanvasRenderer(
         if (!pathNodeSet!.has(node.id) && isDimEligible(node)) drawNode(node, false);
       }
       ctx.globalAlpha = 1;
+      // The highlighted route line is drawn above all off-path clutter (edges and
+      // dimmed nodes alike), but still below the on-path nodes drawn next, so a node
+      // sitting on the path is never obscured by the line passing through it.
+      for (const edge of sectionEdges) {
+        if (pathEdgePairs.has(`${edge.srcId}|${edge.tgtId}`)) drawEdge(edge, true);
+      }
       for (const node of sectionNodes) {
         if (pathNodeSet!.has(node.id) && isSignificantNode(node)) drawNode(node, true);
       }
