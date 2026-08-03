@@ -177,6 +177,21 @@ function reducer(state: Building, action: Action): Building {
     }
 
     case 'ADD_EDGE': {
+      const { srcId, tgtId } = action.payload;
+      const existing = state.edges.find(
+        (e) => (e.srcId === srcId && e.tgtId === tgtId) || (e.srcId === tgtId && e.tgtId === srcId),
+      );
+      if (existing) {
+        if (existing.type === action.payload.type) return state; // identical edge already exists
+        return {
+          ...state,
+          edges: state.edges.map((e) =>
+            e.id === existing.id
+              ? { ...e, type: action.payload.type, weight: action.payload.weight, crossSection: action.payload.crossSection }
+              : e,
+          ),
+        };
+      }
       const edge: Edge = { ...action.payload, id: generateId() };
       return { ...state, edges: [...state.edges, edge] };
     }
