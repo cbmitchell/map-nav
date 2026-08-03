@@ -9,27 +9,6 @@
   overflow-y: auto;
 }
 
-.routeHeaderRow {
-  display: flex;
-  justify-content: flex-end;
-  padding: 0 14px 6px;
-}
-
-.clearBtn {
-  padding: 3px 8px;
-  background: transparent;
-  border: 1px solid var(--border-default);
-  border-radius: 4px;
-  color: var(--text-dim);
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.clearBtn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
 .fieldBlock {
   display: flex;
   flex-direction: column;

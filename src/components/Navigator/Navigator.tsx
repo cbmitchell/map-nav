@@ -67,12 +67,6 @@ export function Navigator({ state, hiddenCategories, onHiddenCategoriesChange }:
     setTgtId(null);
   }, []);
 
-  const handleClear = useCallback(() => {
-    setSrcId(null);
-    setTgtId(null);
-    setTgtCategory(null);
-  }, []);
-
   // When the path's origin/destination is a room marker's entrance, the entrance
   // visually impersonates the room in the canvas — the Directions panel should show
   // the marker's own label at Start/Arrive too, not the entrance's (usually blank) one.
@@ -160,7 +154,6 @@ export function Navigator({ state, hiddenCategories, onHiddenCategoriesChange }:
           onSrcChange={handleSrcChange}
           onTgtChange={handleTgtChange}
           onTgtCategoryChange={handleTgtCategoryChange}
-          onClear={handleClear}
           activeSectionId={activeSectionId}
           onSectionChange={switchSection}
           onExcludedTypesChange={setExcludedTypes}
