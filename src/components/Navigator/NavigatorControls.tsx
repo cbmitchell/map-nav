@@ -95,7 +95,7 @@ export function NavigatorControls({
     [...grouped.values()].flatMap(({ sectionName, nodes }) =>
       nodes
         .filter((n) => n.id !== excludeId)
-        .map((n) => ({ id: n.id, label: n.label || '(unlabeled)', groupLabel: sectionName })),
+        .map((n) => ({ id: n.id, label: n.label || '(unlabeled)', groupLabel: sectionName, aliases: n.aliases })),
     );
 
   const noRooms = rooms.length === 0;

@@ -86,12 +86,24 @@
 
 .option {
   padding: 7px 10px;
-  font-size: 13px;
   color: var(--text-secondary);
   cursor: pointer;
+}
+
+.optionLabel {
+  font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.optionHint {
+  font-size: 11px;
+  color: var(--text-ghost);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
 }
 
 .optionHighlighted {
@@ -114,7 +126,14 @@
 
   .option {
     padding: 10px 12px;
+  }
+
+  .optionLabel {
     font-size: 14px;
+  }
+
+  .optionHint {
+    font-size: 12px;
   }
 
   .listbox {

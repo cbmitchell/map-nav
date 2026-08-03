@@ -41,6 +41,7 @@ export interface Node {
   category?: string;
   isRoomMarker?: boolean; // true = this room node's entrances are defined by its
                           // "Room Entrance" edges rather than being routable itself
+  aliases?: string[]; // alternate searchable names; meaningful only when isRoom === true
 }
 
 export interface Edge {

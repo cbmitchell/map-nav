@@ -14,6 +14,7 @@ import { ROOM_ENTRANCE_EDGE_TYPE } from '../../utils/roomEntrances';
 import { useMobile } from '../../hooks/useMobile';
 import { generateId } from '../../utils/id';
 import { getDistinctCategories } from '../../utils/categories';
+import { parseAliases } from '../../utils/aliases';
 import popupStyles from './EditorCanvas.module.css';
 
 // ---------------------------------------------------------------------------
@@ -29,6 +30,7 @@ interface LabelEditorState {
   isConnector: boolean;
   category: string;
   isRoomMarker: boolean;
+  aliases: string;
 }
 
 interface EdgeEditorState {
@@ -299,6 +301,7 @@ export function EditorCanvas({
         isConnector: node.isConnector,
         category: node.category ?? '',
         isRoomMarker: node.isRoomMarker ?? false,
+        aliases: (node.aliases ?? []).join(', '),
       });
       return true;
     }
@@ -843,6 +846,7 @@ export function EditorCanvas({
 
   const submitLabelEditor = () => {
     if (!labelEditor) return;
+    const parsedAliases = labelEditor.isRoom ? parseAliases(labelEditor.aliases, labelEditor.label) : [];
     dispatch({
       type: 'UPDATE_NODE',
       payload: {
@@ -851,6 +855,7 @@ export function EditorCanvas({
         isRoom: labelEditor.isRoom,
         isConnector: labelEditor.isConnector,
         category: labelEditor.isRoom && labelEditor.category.trim() ? labelEditor.category.trim() : undefined,
+        aliases: parsedAliases.length > 0 ? parsedAliases : undefined,
       },
     });
     setLabelEditor(null);
@@ -1014,6 +1019,21 @@ export function EditorCanvas({
                     <option key={c} value={c} />
                   ))}
                 </datalist>
+              </div>
+            )}
+            {labelEditor.isRoom && (
+              <div className={popupStyles.popupRow}>
+                <label className={popupStyles.popupLabel}>Aliases</label>
+                <input
+                  className={clsx(popupStyles.popupInput, isSmall && popupStyles.popupInputSheet)}
+                  placeholder="comma-separated, e.g. Server Room, IT Closet"
+                  value={labelEditor.aliases}
+                  onChange={(ev) => setLabelEditor({ ...labelEditor, aliases: ev.target.value })}
+                  onKeyDown={(ev) => {
+                    if (ev.key === 'Enter') submitLabelEditor();
+                    if (ev.key === 'Escape') setLabelEditor(null);
+                  }}
+                />
               </div>
             )}
             <div className={popupStyles.popupRow}>

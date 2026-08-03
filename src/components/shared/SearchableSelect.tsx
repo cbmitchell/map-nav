@@ -6,6 +6,7 @@ export interface SearchableSelectOption {
   id: string;
   label: string;
   groupLabel: string;
+  aliases?: string[];
 }
 
 interface SearchableSelectProps {
@@ -48,7 +49,11 @@ export function SearchableSelect({ options, value, onChange, placeholder, disabl
 
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const filtered = q ? options.filter((o) => o.label.toLowerCase().includes(q)) : options;
+    const filtered = q
+      ? options.filter(
+          (o) => o.label.toLowerCase().includes(q) || (o.aliases?.some((a) => a.toLowerCase().includes(q)) ?? false),
+        )
+      : options;
     const map = new Map<string, SearchableSelectOption[]>();
     for (const opt of filtered) {
       if (!map.has(opt.groupLabel)) map.set(opt.groupLabel, []);
@@ -58,6 +63,20 @@ export function SearchableSelect({ options, value, onChange, placeholder, disabl
   }, [options, query]);
 
   const flatFiltered = useMemo(() => groups.flatMap(([, opts]) => opts), [groups]);
+
+  // Which alias (if any) drove a given option's match, so the dropdown can show
+  // "matched: <alias>" only when the label itself didn't already match the query.
+  const aliasHints = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const map = new Map<string, string>();
+    if (!q) return map;
+    for (const opt of flatFiltered) {
+      if (opt.label.toLowerCase().includes(q)) continue;
+      const matched = opt.aliases?.find((a) => a.toLowerCase().includes(q));
+      if (matched) map.set(opt.id, matched);
+    }
+    return map;
+  }, [flatFiltered, query]);
 
   // Keep the highlighted option in view during keyboard navigation
   useEffect(() => {
@@ -156,6 +175,7 @@ export function SearchableSelect({ options, value, onChange, placeholder, disabl
                 <ul className={styles.groupList}>
                   {opts.map((opt) => {
                     const flatIndex = flatFiltered.indexOf(opt);
+                    const hint = aliasHints.get(opt.id);
                     return (
                       <li
                         key={opt.id}
@@ -167,7 +187,8 @@ export function SearchableSelect({ options, value, onChange, placeholder, disabl
                         // eslint-disable-next-line react-hooks/refs -- commitSelection's ref write runs from this event handler, never during render
                         onMouseDown={(e) => { e.preventDefault(); commitSelection(opt); }}
                       >
-                        {opt.label}
+                        <div className={styles.optionLabel}>{opt.label}</div>
+                        {hint && <div className={styles.optionHint}>matched: {hint}</div>}
                       </li>
                     );
                   })}
