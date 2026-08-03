@@ -25,6 +25,7 @@ interface NavigatorControlsProps {
   onSrcChange: (id: string | null) => void;
   onTgtChange: (id: string | null) => void;
   onTgtCategoryChange: (category: string | null) => void;
+  onClear: () => void;
   onExcludedTypesChange: (types: Set<string>) => void;
   onDirectionsToggle: (v: boolean) => void;
   onSectionChange: (id: string) => void;
@@ -50,6 +51,7 @@ export function NavigatorControls({
   onSrcChange,
   onTgtChange,
   onTgtCategoryChange,
+  onClear,
   onExcludedTypesChange,
   onDirectionsToggle,
   onSectionChange,
@@ -99,6 +101,7 @@ export function NavigatorControls({
     );
 
   const noRooms = rooms.length === 0;
+  const hasSelection = !!srcId || !!tgtId || !!tgtCategory;
 
   const handleDestModeChange = (mode: 'room' | 'category') => {
     setDestMode(mode);
@@ -123,6 +126,11 @@ export function NavigatorControls({
 
   const routeContent = (
     <>
+      <div className={styles.routeHeaderRow}>
+        <button type="button" className={styles.clearBtn} onClick={onClear} disabled={!hasSelection}>
+          Clear
+        </button>
+      </div>
       <div className={styles.fieldBlock}>
         <div className={styles.row}>
           <label className={styles.label}>From</label>
