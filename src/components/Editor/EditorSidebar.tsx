@@ -6,7 +6,6 @@ import type { Action } from '../../hooks/useGraphReducer';
 import type { EdgeTypeDef } from '../../types/graph';
 import { loadPdf, renderPdfPage } from '../../utils/pdf';
 import { generateId } from '../../utils/id';
-import { getDistinctCategories } from '../../utils/categories';
 import { CollapsibleSection } from '../shared/CollapsibleSection';
 import styles from './EditorSidebar.module.css';
 
@@ -18,8 +17,6 @@ interface EditorSidebarProps {
   isMobileOrTablet: boolean;
   isOpen: boolean;
   onClose: () => void;
-  hiddenCategories: string[];
-  onHiddenCategoriesChange: (next: string[]) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -242,7 +239,7 @@ interface FormState {
   file: File | null;
 }
 
-export function EditorSidebar({ building, activeSectionId, onSectionChange, dispatch, isMobileOrTablet, isOpen, onClose, hiddenCategories, onHiddenCategoriesChange }: EditorSidebarProps) {
+export function EditorSidebar({ building, activeSectionId, onSectionChange, dispatch, isMobileOrTablet, isOpen, onClose }: EditorSidebarProps) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<FormState>({ name: '', floor: '', file: null });
   const [importing, setImporting] = useState(false);
@@ -399,7 +396,6 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
   const crossEdges = building.edges.filter((e) => e.crossSection);
   const nodeIndex = new Map(building.nodes.map((n) => [n.id, n]));
   const sectionIndex = new Map(building.sections.map((s) => [s.id, s]));
-  const existingCategories = getDistinctCategories(building.nodes);
 
   return (
     <>
@@ -595,34 +591,6 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
                       ×
                     </button>
                   </div>
-                );
-              })}
-            </div>
-          </CollapsibleSection>
-        </>
-      )}
-
-      {existingCategories.length > 0 && (
-        <>
-          <div className={styles.divider} />
-          <CollapsibleSection title="Categories" storageKey="editor-categories">
-            <div className={styles.crossList}>
-              {existingCategories.map((cat) => {
-                const hidden = hiddenCategories.includes(cat);
-                return (
-                  <label key={cat} className={styles.crossItem}>
-                    <input
-                      type="checkbox"
-                      checked={!hidden}
-                      onChange={(e) => {
-                        const next = e.target.checked
-                          ? hiddenCategories.filter((c) => c !== cat)
-                          : [...hiddenCategories, cat];
-                        onHiddenCategoriesChange(next);
-                      }}
-                    />
-                    <span>{cat}</span>
-                  </label>
                 );
               })}
             </div>

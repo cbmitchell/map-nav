@@ -58,7 +58,6 @@ interface EditorCanvasProps {
   onPan: (dx: number, dy: number) => void;
   onZoomAt: (screenX: number, screenY: number, newScale: number) => void;
   onResize: (w: number, h: number) => void;
-  hiddenCategories: Set<string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -76,7 +75,6 @@ export function EditorCanvas({
   onPan,
   onZoomAt,
   onResize,
-  hiddenCategories,
 }: EditorCanvasProps) {
   const { isMobile, isTablet } = useMobile();
   const isSmall = isMobile || isTablet;
@@ -100,10 +98,7 @@ export function EditorCanvas({
   const [edgeEditor, setEdgeEditor] = useState<EdgeEditorState | null>(null);
   const [calibratePopup, setCalibratePopup] = useState<CalibratePopupState | null>(null);
 
-  const { redraw } = useCanvasRenderer(
-    canvasRef, building, activeSectionId, editorState, zoomPan,
-    undefined, false, false, hiddenCategories,
-  );
+  const { redraw } = useCanvasRenderer(canvasRef, building, activeSectionId, editorState, zoomPan);
 
   // Stable refs for use inside event handlers
   const esRef = useRef(editorState);
@@ -114,8 +109,6 @@ export function EditorCanvas({
   activeSectionIdRef.current = activeSectionId;
   const zoomPanRef = useRef(zoomPan);
   zoomPanRef.current = zoomPan;
-  const hiddenCategoriesRef = useRef(hiddenCategories);
-  hiddenCategoriesRef.current = hiddenCategories;
 
   // ---------------------------------------------------------------------------
   // Canvas sizing
@@ -244,10 +237,7 @@ export function EditorCanvas({
   }
 
   function getSectionNodes() {
-    return buildingRef.current.nodes.filter(
-      (n) => n.sectionId === activeSectionIdRef.current &&
-        !(n.category && hiddenCategoriesRef.current.has(n.category)),
-    );
+    return buildingRef.current.nodes.filter((n) => n.sectionId === activeSectionIdRef.current);
   }
 
   function getSectionEdges(nodes: ReturnType<typeof getSectionNodes>) {

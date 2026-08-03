@@ -20,30 +20,22 @@ function loadMode(): AppMode {
 
 const HIDDEN_CATEGORIES_KEY = 'office-navigator-hidden-categories';
 
-interface HiddenCategoriesState {
-  editor: string[];
-  navigator: string[];
-}
-
-function loadHiddenCategories(): HiddenCategoriesState {
+function loadHiddenCategories(): string[] {
   try {
     const stored = localStorage.getItem(HIDDEN_CATEGORIES_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
-      if (parsed && Array.isArray(parsed.editor) && Array.isArray(parsed.navigator)) {
-        return {
-          editor: parsed.editor.filter((c: unknown) => typeof c === 'string'),
-          navigator: parsed.navigator.filter((c: unknown) => typeof c === 'string'),
-        };
+      if (Array.isArray(parsed)) {
+        return parsed.filter((c: unknown) => typeof c === 'string');
       }
     }
   } catch { /* ignore */ }
-  return { editor: [], navigator: [] };
+  return [];
 }
 
 export function AppShell() {
   const [mode, setMode] = useState<AppMode>(loadMode);
-  const [hiddenCategories, setHiddenCategories] = useState<HiddenCategoriesState>(loadHiddenCategories);
+  const [hiddenCategories, setHiddenCategories] = useState<string[]>(loadHiddenCategories);
   const { state, dispatch, undo, storageError } = useGraphReducer();
 
   const [nameDraft, setNameDraft] = useState(state.name);
@@ -101,25 +93,14 @@ export function AppShell() {
       <main className={styles.main}>
         {mode === 'editor' ? (
           <ErrorBoundary label="Editor">
-            <Editor
-              state={state}
-              dispatch={dispatch}
-              undo={undo}
-              storageError={storageError}
-              hiddenCategories={hiddenCategories.editor}
-              onHiddenCategoriesChange={(next) =>
-                setHiddenCategories((prev) => ({ ...prev, editor: next }))
-              }
-            />
+            <Editor state={state} dispatch={dispatch} undo={undo} storageError={storageError} />
           </ErrorBoundary>
         ) : (
           <ErrorBoundary label="Navigator">
             <Navigator
               state={state}
-              hiddenCategories={hiddenCategories.navigator}
-              onHiddenCategoriesChange={(next) =>
-                setHiddenCategories((prev) => ({ ...prev, navigator: next }))
-              }
+              hiddenCategories={hiddenCategories}
+              onHiddenCategoriesChange={setHiddenCategories}
             />
           </ErrorBoundary>
         )}
