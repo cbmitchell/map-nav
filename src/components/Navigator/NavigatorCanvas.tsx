@@ -1,4 +1,4 @@
-import { useRef, useState, useLayoutEffect, useEffect } from 'react';
+import { useRef, useState, useLayoutEffect, useEffect, useMemo } from 'react';
 import type { Building } from '../../types/graph';
 import type { ZoomPanState } from '../../hooks/useZoomPan';
 import { fitZoomPan } from '../../hooks/useZoomPan';
@@ -31,6 +31,7 @@ interface NavigatorCanvasProps {
   onAutoFit: (state: ZoomPanState) => void;
   onSetOrigin: (nodeId: string) => void;
   onSetDestination: (nodeId: string) => void;
+  hiddenCategories: Set<string>;
 }
 
 export function NavigatorCanvas({
@@ -44,6 +45,7 @@ export function NavigatorCanvas({
   onAutoFit,
   onSetOrigin,
   onSetDestination,
+  hiddenCategories,
 }: NavigatorCanvasProps) {
   const { isMobile, isTablet } = useMobile();
   const isSmall = isMobile || isTablet;
@@ -60,6 +62,7 @@ export function NavigatorCanvas({
   const zoomPanRef = useRef(zoomPan);
   const buildingRef = useRef(building);
   const activeSectionIdRef = useRef(activeSectionId);
+  const hiddenCategoriesRef = useRef(hiddenCategories);
 
   const [nodeMenu, setNodeMenu] = useState<NodeMenuState | null>(null);
 
@@ -67,7 +70,10 @@ export function NavigatorCanvas({
     zoomPanRef.current = zoomPan;
     buildingRef.current = building;
     activeSectionIdRef.current = activeSectionId;
+    hiddenCategoriesRef.current = hiddenCategories;
   });
+
+  const pathNodeSet = useMemo(() => (path ? new Set(path) : null), [path]);
 
   // Close the click/tap node menu when the active section changes — its screen-space
   // position is meaningless after switching sections. Adjusting state during render —
@@ -89,6 +95,7 @@ export function NavigatorCanvas({
     path,
     path === null,
     true,
+    hiddenCategories,
   );
 
   // Canvas sizing
@@ -205,7 +212,8 @@ export function NavigatorCanvas({
   const hitTestRoomNode = (sx: number, sy: number): { id: string; label: string } | null => {
     const canvas = canvasRef.current!;
     const sectionNodes = buildingRef.current.nodes.filter(
-      (n) => n.sectionId === activeSectionIdRef.current && n.isRoom,
+      (n) => n.sectionId === activeSectionIdRef.current && n.isRoom &&
+        (!n.category || !hiddenCategoriesRef.current.has(n.category) || (pathNodeSet !== null && pathNodeSet.has(n.id))),
     );
 
     let hit: { id: string; label: string } | null = null;

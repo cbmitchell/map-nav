@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import clsx from 'clsx';
 import type { Building } from '../../types/graph';
 import { useMobile } from '../../hooks/useMobile';
@@ -6,6 +6,7 @@ import { DirectionsPanel } from './DirectionsPanel';
 import { CollapsibleSection } from '../shared/CollapsibleSection';
 import { SearchableSelect } from '../shared/SearchableSelect';
 import type { SearchableSelectOption } from '../shared/SearchableSelect';
+import { getDistinctCategories } from '../../utils/categories';
 import styles from './NavigatorControls.module.css';
 
 interface NavigatorControlsProps {
@@ -27,9 +28,11 @@ interface NavigatorControlsProps {
   onExcludedTypesChange: (types: Set<string>) => void;
   onDirectionsToggle: (v: boolean) => void;
   onSectionChange: (id: string) => void;
+  hiddenCategories: string[];
+  onHiddenCategoriesChange: (next: string[]) => void;
 }
 
-type TabId = 'route' | 'options' | 'directions' | 'sections';
+type TabId = 'route' | 'options' | 'directions' | 'categories' | 'sections';
 
 export function NavigatorControls({
   building,
@@ -50,6 +53,8 @@ export function NavigatorControls({
   onExcludedTypesChange,
   onDirectionsToggle,
   onSectionChange,
+  hiddenCategories,
+  onHiddenCategoriesChange,
 }: NavigatorControlsProps) {
   const [destMode, setDestMode] = useState<'room' | 'category'>('room');
   const { isMobile, isTablet } = useMobile();
@@ -58,7 +63,16 @@ export function NavigatorControls({
   const [activeTab, setActiveTab] = useState<TabId>('route');
   const [tabExpanded, setTabExpanded] = useState(true);
 
-  const rooms = building.nodes.filter((n) => n.isRoom);
+  const hiddenCategoriesSet = useMemo(() => new Set(hiddenCategories), [hiddenCategories]);
+  const isHiddenCategory = (n: Building['nodes'][number]) =>
+    !!(n.category && hiddenCategoriesSet.has(n.category));
+
+  // Feeds only the origin/destination SearchableSelects. Keeps whichever room is
+  // currently selected as srcId/tgtId even if its category is hidden, so the
+  // SearchableSelect's `selected` lookup doesn't come back empty for an active selection.
+  const rooms = building.nodes.filter(
+    (n) => n.isRoom && (!isHiddenCategory(n) || n.id === srcId || n.id === tgtId),
+  );
 
   // Group rooms by section name for <optgroup>
   const sectionIndex = new Map(building.sections.map((s) => [s.id, s]));
@@ -72,9 +86,10 @@ export function NavigatorControls({
     grouped.get(key)!.nodes.push(node);
   }
 
-  const knownCategories = [...new Set(
-    rooms.filter((n) => n.category).map((n) => n.category as string),
-  )].sort();
+  // Not derived from `rooms` — must stay unfiltered by hidden state, since it feeds
+  // "Nearest in category" (which must remain usable for a hidden category) and the
+  // Categories toggle list itself.
+  const knownCategories = getDistinctCategories(building.nodes, { roomsOnly: true });
 
   const roomSelectOptions = (excludeId: string | null): SearchableSelectOption[] =>
     [...grouped.values()].flatMap(({ sectionName, nodes }) =>
@@ -226,6 +241,29 @@ export function NavigatorControls({
     </div>
   );
 
+  const categoriesContent = (
+    <div className={styles.typeList}>
+      {knownCategories.map((cat) => {
+        const hidden = hiddenCategories.includes(cat);
+        return (
+          <label key={cat} className={styles.typeRow}>
+            <input
+              type="checkbox"
+              checked={!hidden}
+              onChange={(e) => {
+                const next = e.target.checked
+                  ? hiddenCategories.filter((c) => c !== cat)
+                  : [...hiddenCategories, cat];
+                onHiddenCategoriesChange(next);
+              }}
+            />
+            <span className={styles.typeName}>{cat}</span>
+          </label>
+        );
+      })}
+    </div>
+  );
+
   const sectionsContent = (
     <div className={styles.sectionList}>
       {[...building.sections].sort((a, b) => a.name.localeCompare(b.name)).map((s) => (
@@ -246,6 +284,7 @@ export function NavigatorControls({
       { id: 'route', label: 'Route', content: routeContent },
       { id: 'options', label: 'Options', content: routeOptionsContent },
       { id: 'directions', label: 'Directions', content: directionsContent },
+      ...(knownCategories.length > 0 ? [{ id: 'categories' as const, label: 'Categories', content: categoriesContent }] : []),
       ...(hasSections ? [{ id: 'sections' as const, label: 'Sections', content: sectionsContent }] : []),
     ];
     const active = tabs.find((t) => t.id === activeTab) ?? tabs[0];
@@ -297,6 +336,15 @@ export function NavigatorControls({
       <CollapsibleSection title="Directions" storageKey="nav-directions">
         {directionsContent}
       </CollapsibleSection>
+
+      {knownCategories.length > 0 && (
+        <>
+          <div className={styles.divider} />
+          <CollapsibleSection title="Categories" storageKey="nav-categories">
+            {categoriesContent}
+          </CollapsibleSection>
+        </>
+      )}
 
       {hasSections && (
         <>

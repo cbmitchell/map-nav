@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react';
 import type { Dispatch } from 'react';
 import type { Building } from '../../types/graph';
 import type { Action } from '../../hooks/useGraphReducer';
@@ -18,10 +18,13 @@ interface EditorProps {
   dispatch: Dispatch<Action>;
   undo: () => void;
   storageError: boolean;
+  hiddenCategories: string[];
+  onHiddenCategoriesChange: (next: string[]) => void;
 }
 
-export function Editor({ state, dispatch, undo, storageError }: EditorProps) {
+export function Editor({ state, dispatch, undo, storageError, hiddenCategories, onHiddenCategoriesChange }: EditorProps) {
   const { isMobile, isTablet } = useMobile();
+  const hiddenCategoriesSet = useMemo(() => new Set(hiddenCategories), [hiddenCategories]);
   const isMobileOrTablet = isMobile || isTablet;
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // preferredSectionId: explicitly chosen by user; falls back to first available section
@@ -212,6 +215,8 @@ export function Editor({ state, dispatch, undo, storageError }: EditorProps) {
           isMobileOrTablet={isMobileOrTablet}
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
+          hiddenCategories={hiddenCategories}
+          onHiddenCategoriesChange={onHiddenCategoriesChange}
         />
         <div className={styles.canvasArea}>
           {state.sections.length === 0 ? (
@@ -240,6 +245,7 @@ export function Editor({ state, dispatch, undo, storageError }: EditorProps) {
               onPan={pan}
               onZoomAt={zoomAt}
               onResize={handleResize}
+              hiddenCategories={hiddenCategoriesSet}
             />
           )}
         </div>

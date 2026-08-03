@@ -11,9 +11,12 @@ import { NavigatorCanvas } from './NavigatorCanvas';
 
 interface NavigatorProps {
   state: Building;
+  hiddenCategories: string[];
+  onHiddenCategoriesChange: (next: string[]) => void;
 }
 
-export function Navigator({ state }: NavigatorProps) {
+export function Navigator({ state, hiddenCategories, onHiddenCategoriesChange }: NavigatorProps) {
+  const hiddenCategoriesSet = useMemo(() => new Set(hiddenCategories), [hiddenCategories]);
   const [srcId, setSrcId] = useState<string | null>(null);
   const [tgtId, setTgtId] = useState<string | null>(null);
   const [tgtCategory, setTgtCategory] = useState<string | null>(null);
@@ -155,6 +158,8 @@ export function Navigator({ state }: NavigatorProps) {
           onSectionChange={switchSection}
           onExcludedTypesChange={setExcludedTypes}
           onDirectionsToggle={setShowDirections}
+          hiddenCategories={hiddenCategories}
+          onHiddenCategoriesChange={onHiddenCategoriesChange}
         />
 
         <div className={styles.canvasArea}>
@@ -169,6 +174,7 @@ export function Navigator({ state }: NavigatorProps) {
             onAutoFit={setView}
             onSetOrigin={handleSrcChange}
             onSetDestination={handleTgtChange}
+            hiddenCategories={hiddenCategoriesSet}
           />
         </div>
       </div>

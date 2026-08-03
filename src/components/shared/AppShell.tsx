@@ -18,8 +18,32 @@ function loadMode(): AppMode {
   return 'editor';
 }
 
+const HIDDEN_CATEGORIES_KEY = 'office-navigator-hidden-categories';
+
+interface HiddenCategoriesState {
+  editor: string[];
+  navigator: string[];
+}
+
+function loadHiddenCategories(): HiddenCategoriesState {
+  try {
+    const stored = localStorage.getItem(HIDDEN_CATEGORIES_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed && Array.isArray(parsed.editor) && Array.isArray(parsed.navigator)) {
+        return {
+          editor: parsed.editor.filter((c: unknown) => typeof c === 'string'),
+          navigator: parsed.navigator.filter((c: unknown) => typeof c === 'string'),
+        };
+      }
+    }
+  } catch { /* ignore */ }
+  return { editor: [], navigator: [] };
+}
+
 export function AppShell() {
   const [mode, setMode] = useState<AppMode>(loadMode);
+  const [hiddenCategories, setHiddenCategories] = useState<HiddenCategoriesState>(loadHiddenCategories);
   const { state, dispatch, undo, storageError } = useGraphReducer();
 
   const [nameDraft, setNameDraft] = useState(state.name);
@@ -39,6 +63,10 @@ export function AppShell() {
   useEffect(() => {
     try { localStorage.setItem(MODE_KEY, mode); } catch { /* ignore */ }
   }, [mode]);
+
+  useEffect(() => {
+    try { localStorage.setItem(HIDDEN_CATEGORIES_KEY, JSON.stringify(hiddenCategories)); } catch { /* ignore */ }
+  }, [hiddenCategories]);
 
   return (
     <div className={styles.shell}>
@@ -73,11 +101,26 @@ export function AppShell() {
       <main className={styles.main}>
         {mode === 'editor' ? (
           <ErrorBoundary label="Editor">
-            <Editor state={state} dispatch={dispatch} undo={undo} storageError={storageError} />
+            <Editor
+              state={state}
+              dispatch={dispatch}
+              undo={undo}
+              storageError={storageError}
+              hiddenCategories={hiddenCategories.editor}
+              onHiddenCategoriesChange={(next) =>
+                setHiddenCategories((prev) => ({ ...prev, editor: next }))
+              }
+            />
           </ErrorBoundary>
         ) : (
           <ErrorBoundary label="Navigator">
-            <Navigator state={state} />
+            <Navigator
+              state={state}
+              hiddenCategories={hiddenCategories.navigator}
+              onHiddenCategoriesChange={(next) =>
+                setHiddenCategories((prev) => ({ ...prev, navigator: next }))
+              }
+            />
           </ErrorBoundary>
         )}
       </main>

@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, useEffect } from 'react';
 import type { RefObject } from 'react';
-import type { Building, EdgeTypeDef } from '../types/graph';
+import type { Building, EdgeTypeDef, Node } from '../types/graph';
 import type { EditorState } from '../types/editor';
 import { DEFAULT_EDITOR_STATE } from '../types/editor';
 import type { ZoomPanState } from './useZoomPan';
@@ -22,6 +22,7 @@ export function buildEdgeLookups(edgeTypes: EdgeTypeDef[]) {
 const PATH_COLOR = '#EF9F27';
 const DIM_ALPHA = 0.15;
 const NODE_DIM_ALPHA = 0.5;
+const EMPTY_HIDDEN_SET = new Set<string>();
 
 // ---------------------------------------------------------------------------
 // Hook
@@ -36,6 +37,7 @@ export function useCanvasRenderer(
   highlightPath: string[] | null = null,
   roomsOnly = false,
   isNavigator = false,
+  hiddenCategories: Set<string> = EMPTY_HIDDEN_SET,
 ) {
   const buildingRef = useRef(building);
   const activeSectionIdRef = useRef(activeSectionId);
@@ -44,6 +46,7 @@ export function useCanvasRenderer(
   const highlightPathRef = useRef(highlightPath);
   const roomsOnlyRef = useRef(roomsOnly);
   const isNavigatorRef = useRef(isNavigator);
+  const hiddenCategoriesRef = useRef(hiddenCategories);
   const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
   const redrawRef = useRef<() => void>(() => {});
 
@@ -55,6 +58,7 @@ export function useCanvasRenderer(
     highlightPathRef.current = highlightPath;
     roomsOnlyRef.current = roomsOnly;
     isNavigatorRef.current = isNavigator;
+    hiddenCategoriesRef.current = hiddenCategories;
   });
 
   const redraw = useCallback(() => {
@@ -72,6 +76,7 @@ export function useCanvasRenderer(
     const path = highlightPathRef.current;
     const roomsOnly = roomsOnlyRef.current;
     const isNavigator = isNavigatorRef.current;
+    const hiddenCategories = hiddenCategoriesRef.current;
 
     // On mobile the canvas may be taller than the image aspect ratio (fills the screen).
     // Content coordinates are always bounded by the image's natural aspect ratio.
@@ -91,6 +96,12 @@ export function useCanvasRenderer(
     }
 
     const isPathMode = pathNodeSet !== null;
+
+    // A node whose category is hidden is treated as normal (never hidden) while it's
+    // part of the active path — mirrors the room-marker impersonation precedent below,
+    // so a routed-to node stays visible/clickable for the duration of the route.
+    const isCategoryHidden = (n: Node) =>
+      !!(n.category && hiddenCategories.has(n.category)) && !(pathNodeSet && pathNodeSet.has(n.id));
 
     // Fill the full canvas with a dark background (screen space, no transform)
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -135,12 +146,12 @@ export function useCanvasRenderer(
     const sectionEdges = building.edges.filter((e) => {
       if (e.crossSection) return false;
       if (isNavigator && e.type === ROOM_ENTRANCE_EDGE_TYPE) return false; // organizational only
-      return (
-        nodeIndex.has(e.srcId) &&
-        nodeIndex.has(e.tgtId) &&
-        nodeIndex.get(e.srcId)!.sectionId === activeSectionId &&
-        nodeIndex.get(e.tgtId)!.sectionId === activeSectionId
-      );
+      if (!nodeIndex.has(e.srcId) || !nodeIndex.has(e.tgtId)) return false;
+      const src = nodeIndex.get(e.srcId)!;
+      const tgt = nodeIndex.get(e.tgtId)!;
+      if (src.sectionId !== activeSectionId || tgt.sectionId !== activeSectionId) return false;
+      if (isCategoryHidden(src) || isCategoryHidden(tgt)) return false;
+      return true;
     });
 
     // Helper: content coords → screen coords
@@ -439,7 +450,8 @@ export function useCanvasRenderer(
       // Off-path nodes are only shown (dimmed) if they're rooms — except a room
       // marker currently being impersonated by its resolved entrance, which hides
       // entirely so only one node ever represents a given room on screen at a time.
-      const isDimEligible = (n: typeof sectionNodes[number]) => n.isRoom && !hiddenMarkerIds.has(n.id);
+      const isDimEligible = (n: typeof sectionNodes[number]) =>
+        n.isRoom && !hiddenMarkerIds.has(n.id) && !isCategoryHidden(n);
       ctx.globalAlpha = NODE_DIM_ALPHA;
       for (const node of sectionNodes) {
         if (!pathNodeSet!.has(node.id) && isDimEligible(node)) drawNode(node, false);
@@ -450,6 +462,7 @@ export function useCanvasRenderer(
       }
     } else {
       for (const node of sectionNodes) {
+        if (isCategoryHidden(node)) continue;
         if (!roomsOnly || node.isRoom) drawNode(node, false);
       }
     }
@@ -462,7 +475,7 @@ export function useCanvasRenderer(
 
   useEffect(() => {
     redraw();
-  }, [redraw, building, activeSectionId, editorState, zoomPan, highlightPath, roomsOnly, isNavigator]);
+  }, [redraw, building, activeSectionId, editorState, zoomPan, highlightPath, roomsOnly, isNavigator, hiddenCategories]);
 
   return { redraw };
 }
