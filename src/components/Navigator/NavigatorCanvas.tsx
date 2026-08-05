@@ -1,7 +1,7 @@
 import { useRef, useState, useLayoutEffect, useEffect, useMemo } from 'react';
 import type { Building } from '../../types/graph';
 import type { ZoomPanState } from '../../hooks/useZoomPan';
-import { fitZoomPan } from '../../hooks/useZoomPan';
+import { fitZoomPan, DEFAULT_ZOOM_PAN } from '../../hooks/useZoomPan';
 import { useCanvasRenderer } from '../../hooks/useCanvasRenderer';
 import { useMobile } from '../../hooks/useMobile';
 import styles from './NavigatorCanvas.module.css';
@@ -116,13 +116,24 @@ export function NavigatorCanvas({
       );
       const imageAspectH = section?.imageW ? Math.round((w * section.imageH) / section.imageW) : w;
       contentHRef.current = imageAspectH;
-      // Expand the canvas to fill all available vertical space so zoomed/panned
-      // content is not clipped at the image's unzoomed aspect-ratio boundary.
-      const h = Math.max(container.clientHeight, imageAspectH);
+      // The canvas buffer is always just the visible viewport size — zoom/pan is
+      // handled entirely by the transform in useCanvasRenderer, which can display any
+      // window of content-space within a fixed-size buffer, so the buffer itself never
+      // needs to grow to accommodate a tall image or a zoomed-in view.
+      const h = container.clientHeight;
       if (canvas.width !== w || canvas.height !== h) {
         canvas.width = w;
         canvas.height = h;
       }
+
+      // If the view hasn't been customized for this section (still at the untouched
+      // default), fit the whole image into the visible area instead of leaving it at
+      // 1:1 scale, which crops the bottom of any image taller than the viewport.
+      const zp = zoomPanRef.current;
+      if (zp.scale === DEFAULT_ZOOM_PAN.scale && zp.panX === DEFAULT_ZOOM_PAN.panX && zp.panY === DEFAULT_ZOOM_PAN.panY) {
+        onAutoFit(fitZoomPan({ minX: 0, minY: 0, maxX: w, maxY: imageAspectH }, container.clientWidth, container.clientHeight, 0));
+      }
+
       redraw();
     };
 
@@ -130,7 +141,7 @@ export function NavigatorCanvas({
     const observer = new ResizeObserver(updateSize);
     observer.observe(container);
     return () => observer.disconnect();
-  }, [activeSectionId, building.sections, redraw, isSmall]);
+  }, [activeSectionId, building.sections, redraw, isSmall, onAutoFit]);
 
   // Auto-fit the view to the selected path's nodes in the currently displayed section.
   // Re-runs whenever the path or the active section changes (including stepping through
@@ -382,7 +393,6 @@ export function NavigatorCanvas({
     <div
       ref={containerRef}
       className={styles.container}
-      style={isSmall ? { height: '100%' } : undefined}
       onMouseLeave={() => { panRef.current = null; hasPannedRef.current = false; }}
     >
       {!hasImage && (

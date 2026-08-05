@@ -2,7 +2,7 @@ import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react
 import type { Dispatch } from 'react';
 import type { Building } from '../../types/graph';
 import type { Action } from '../../hooks/useGraphReducer';
-import { useZoomPan, DEFAULT_ZOOM_PAN } from '../../hooks/useZoomPan';
+import { useZoomPan, DEFAULT_ZOOM_PAN, fitZoomPan } from '../../hooks/useZoomPan';
 import { useMobile } from '../../hooks/useMobile';
 import { ROOM_ENTRANCE_EDGE_TYPE } from '../../utils/roomEntrances';
 import styles from './Editor.module.css';
@@ -180,6 +180,19 @@ export function Editor({ state, dispatch, undo, storageError }: EditorProps) {
     zoomOut(w / 2, h / 2);
   }, [zoomOut]);
 
+  // "Reset view" fits the whole image to the viewport, same as an initial section
+  // load, rather than jumping to a literal 1:1 scale that can crop a tall image.
+  const handleResetView = useCallback(() => {
+    const { w, h } = canvasSizeRef.current;
+    const section = state.sections.find((s) => s.id === activeSectionId);
+    if (section?.imageW && w > 0 && h > 0) {
+      const imageAspectH = Math.round((w * section.imageH) / section.imageW);
+      setView(fitZoomPan({ minX: 0, minY: 0, maxX: w, maxY: imageAspectH }, w, h, 0));
+    } else {
+      resetView();
+    }
+  }, [state.sections, activeSectionId, setView, resetView]);
+
   const activeSection = state.sections.find((s) => s.id === activeSectionId);
 
   return (
@@ -200,7 +213,7 @@ export function Editor({ state, dispatch, undo, storageError }: EditorProps) {
         scale={zoomPan.scale}
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
-        onResetView={resetView}
+        onResetView={handleResetView}
         onSidebarToggle={() => setSidebarOpen((p) => !p)}
       />
       <div className={styles.body}>
@@ -240,6 +253,7 @@ export function Editor({ state, dispatch, undo, storageError }: EditorProps) {
               onPan={pan}
               onZoomAt={zoomAt}
               onResize={handleResize}
+              onAutoFit={setView}
             />
           )}
         </div>

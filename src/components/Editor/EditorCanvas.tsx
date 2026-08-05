@@ -5,7 +5,7 @@ import type { Building, Node, EdgeType } from '../../types/graph';
 import type { EditorState } from '../../types/editor';
 import type { Action } from '../../hooks/useGraphReducer';
 import type { ZoomPanState } from '../../hooks/useZoomPan';
-import { screenToCanvas } from '../../hooks/useZoomPan';
+import { screenToCanvas, fitZoomPan, DEFAULT_ZOOM_PAN } from '../../hooks/useZoomPan';
 import { useCanvasRenderer } from '../../hooks/useCanvasRenderer';
 import { distanceToSegment, px2norm, closestPointOnSegment } from '../../utils/geometry';
 import { computeEdgeWeight } from '../../utils/pathfinding';
@@ -60,6 +60,7 @@ interface EditorCanvasProps {
   onPan: (dx: number, dy: number) => void;
   onZoomAt: (screenX: number, screenY: number, newScale: number) => void;
   onResize: (w: number, h: number) => void;
+  onAutoFit: (state: ZoomPanState) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -77,6 +78,7 @@ export function EditorCanvas({
   onPan,
   onZoomAt,
   onResize,
+  onAutoFit,
 }: EditorCanvasProps) {
   const { isMobile, isTablet } = useMobile();
   const isSmall = isMobile || isTablet;
@@ -126,14 +128,25 @@ export function EditorCanvas({
       const section = buildingRef.current.sections.find((s) => s.id === activeSectionIdRef.current);
       const imageAspectH = section?.imageW ? Math.round(w * section.imageH / section.imageW) : w;
       contentHRef.current = imageAspectH;
-      // Expand the canvas to fill all available vertical space so zoomed/panned
-      // content is not clipped at the image's unzoomed aspect-ratio boundary.
-      const h = Math.max(container.clientHeight, imageAspectH);
+      // The canvas buffer is always just the visible viewport size — zoom/pan is
+      // handled entirely by the transform in useCanvasRenderer, which can display any
+      // window of content-space within a fixed-size buffer, so the buffer itself never
+      // needs to grow to accommodate a tall image or a zoomed-in view.
+      const h = container.clientHeight;
       if (canvas.width !== w || canvas.height !== h) {
         canvas.width = w;
         canvas.height = h;
       }
-      onResize(w, imageAspectH);
+      onResize(w, h);
+
+      // If the view hasn't been customized for this section (still at the untouched
+      // default), fit the whole image into the visible area instead of leaving it at
+      // 1:1 scale, which crops the bottom of any image taller than the viewport.
+      const zp = zoomPanRef.current;
+      if (zp.scale === DEFAULT_ZOOM_PAN.scale && zp.panX === DEFAULT_ZOOM_PAN.panX && zp.panY === DEFAULT_ZOOM_PAN.panY) {
+        onAutoFit(fitZoomPan({ minX: 0, minY: 0, maxX: w, maxY: imageAspectH }, container.clientWidth, container.clientHeight, 0));
+      }
+
       redraw();
     };
 
@@ -141,7 +154,7 @@ export function EditorCanvas({
     const observer = new ResizeObserver(updateSize);
     observer.observe(container);
     return () => observer.disconnect();
-  }, [activeSectionId, building.sections, redraw, isSmall, onResize]);
+  }, [activeSectionId, building.sections, redraw, isSmall, onResize, onAutoFit]);
 
   // Close the edge editor popup if its edge was deleted elsewhere (keyboard shortcut,
   // sidebar delete button) — not just via this popup's own Delete Edge button.
