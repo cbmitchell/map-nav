@@ -32,6 +32,8 @@ interface NavigatorCanvasProps {
   onSetOrigin: (nodeId: string) => void;
   onSetDestination: (nodeId: string) => void;
   hiddenCategories: Set<string>;
+  favorites: Set<string>;
+  onToggleFavorite: (nodeId: string) => void;
 }
 
 export function NavigatorCanvas({
@@ -46,6 +48,8 @@ export function NavigatorCanvas({
   onSetOrigin,
   onSetDestination,
   hiddenCategories,
+  favorites,
+  onToggleFavorite,
 }: NavigatorCanvasProps) {
   const { isMobile, isTablet } = useMobile();
   const isSmall = isMobile || isTablet;
@@ -96,6 +100,7 @@ export function NavigatorCanvas({
     path === null,
     true,
     hiddenCategories,
+    favorites,
   );
 
   // Canvas sizing
@@ -362,6 +367,12 @@ export function NavigatorCanvas({
     setNodeMenu(null);
   };
 
+  const handleToggleFavorite = () => {
+    if (!nodeMenu) return;
+    onToggleFavorite(nodeMenu.nodeId);
+    setNodeMenu(null);
+  };
+
   // ---------------------------------------------------------------------------
 
   const section = building.sections.find((s) => s.id === activeSectionId);
@@ -406,6 +417,9 @@ export function NavigatorCanvas({
             <div className={styles.menuLabel}>{nodeMenu.label}</div>
             <button className={styles.menuBtn} onClick={handleSetOrigin}>Set origin</button>
             <button className={styles.menuBtn} onClick={handleSetDestination}>Set destination</button>
+            <button className={styles.menuBtn} onClick={handleToggleFavorite}>
+              {favorites.has(nodeMenu.nodeId) ? '★ Remove favorite' : '☆ Add favorite'}
+            </button>
           </div>
         </>
       )}

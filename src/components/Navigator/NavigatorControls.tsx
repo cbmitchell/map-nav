@@ -30,6 +30,7 @@ interface NavigatorControlsProps {
   onSectionChange: (id: string) => void;
   hiddenCategories: string[];
   onHiddenCategoriesChange: (next: string[]) => void;
+  favorites: string[];
 }
 
 type TabId = 'route' | 'options' | 'directions' | 'categories' | 'sections';
@@ -55,6 +56,7 @@ export function NavigatorControls({
   onSectionChange,
   hiddenCategories,
   onHiddenCategoriesChange,
+  favorites,
 }: NavigatorControlsProps) {
   const [destMode, setDestMode] = useState<'room' | 'category'>('room');
   const { isMobile, isTablet } = useMobile();
@@ -64,6 +66,7 @@ export function NavigatorControls({
   const [tabExpanded, setTabExpanded] = useState(true);
 
   const hiddenCategoriesSet = useMemo(() => new Set(hiddenCategories), [hiddenCategories]);
+  const favoriteSet = useMemo(() => new Set(favorites), [favorites]);
   const isHiddenCategory = (n: Building['nodes'][number]) =>
     !!(n.category && hiddenCategoriesSet.has(n.category));
 
@@ -91,12 +94,22 @@ export function NavigatorControls({
   // Categories toggle list itself.
   const knownCategories = getDistinctCategories(building.nodes, { roomsOnly: true });
 
-  const roomSelectOptions = (excludeId: string | null): SearchableSelectOption[] =>
-    [...grouped.values()].flatMap(({ sectionName, nodes }) =>
-      nodes
-        .filter((n) => n.id !== excludeId)
-        .map((n) => ({ id: n.id, label: n.label || '(unlabeled)', groupLabel: sectionName, aliases: n.aliases })),
-    );
+  const roomSelectOptions = (excludeId: string | null): SearchableSelectOption[] => {
+    const favOptions: SearchableSelectOption[] = [];
+    const restOptions: SearchableSelectOption[] = [];
+    for (const { sectionName, nodes } of grouped.values()) {
+      for (const n of nodes) {
+        if (n.id === excludeId) continue;
+        const opt = { id: n.id, label: n.label || '(unlabeled)', groupLabel: sectionName, aliases: n.aliases };
+        if (favoriteSet.has(n.id)) {
+          favOptions.push({ ...opt, groupLabel: '★ Favorites' });
+        } else {
+          restOptions.push(opt);
+        }
+      }
+    }
+    return [...favOptions, ...restOptions];
+  };
 
   const noRooms = rooms.length === 0;
 

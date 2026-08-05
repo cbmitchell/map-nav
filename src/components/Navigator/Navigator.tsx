@@ -13,10 +13,13 @@ interface NavigatorProps {
   state: Building;
   hiddenCategories: string[];
   onHiddenCategoriesChange: (next: string[]) => void;
+  favorites: string[];
+  onFavoritesChange: (next: string[]) => void;
 }
 
-export function Navigator({ state, hiddenCategories, onHiddenCategoriesChange }: NavigatorProps) {
+export function Navigator({ state, hiddenCategories, onHiddenCategoriesChange, favorites, onFavoritesChange }: NavigatorProps) {
   const hiddenCategoriesSet = useMemo(() => new Set(hiddenCategories), [hiddenCategories]);
+  const favoritesSet = useMemo(() => new Set(favorites), [favorites]);
   const [srcId, setSrcId] = useState<string | null>(null);
   const [tgtId, setTgtId] = useState<string | null>(null);
   const [tgtCategory, setTgtCategory] = useState<string | null>(null);
@@ -66,6 +69,12 @@ export function Navigator({ state, hiddenCategories, onHiddenCategoriesChange }:
     setTgtCategory(cat);
     setTgtId(null);
   }, []);
+
+  const handleToggleFavorite = useCallback((nodeId: string) => {
+    onFavoritesChange(
+      favorites.includes(nodeId) ? favorites.filter((id) => id !== nodeId) : [...favorites, nodeId],
+    );
+  }, [favorites, onFavoritesChange]);
 
   // When the path's origin/destination is a room marker's entrance, the entrance
   // visually impersonates the room in the canvas — the Directions panel should show
@@ -160,6 +169,7 @@ export function Navigator({ state, hiddenCategories, onHiddenCategoriesChange }:
           onDirectionsToggle={setShowDirections}
           hiddenCategories={hiddenCategories}
           onHiddenCategoriesChange={onHiddenCategoriesChange}
+          favorites={favorites}
         />
 
         <div className={styles.canvasArea}>
@@ -175,6 +185,8 @@ export function Navigator({ state, hiddenCategories, onHiddenCategoriesChange }:
             onSetOrigin={handleSrcChange}
             onSetDestination={handleTgtChange}
             hiddenCategories={hiddenCategoriesSet}
+            favorites={favoritesSet}
+            onToggleFavorite={handleToggleFavorite}
           />
         </div>
       </div>

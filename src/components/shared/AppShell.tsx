@@ -33,9 +33,25 @@ function loadHiddenCategories(): string[] {
   return [];
 }
 
+const FAVORITES_KEY = 'office-navigator-favorites';
+
+function loadFavorites(): string[] {
+  try {
+    const stored = localStorage.getItem(FAVORITES_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((c: unknown) => typeof c === 'string');
+      }
+    }
+  } catch { /* ignore */ }
+  return [];
+}
+
 export function AppShell() {
   const [mode, setMode] = useState<AppMode>(loadMode);
   const [hiddenCategories, setHiddenCategories] = useState<string[]>(loadHiddenCategories);
+  const [favorites, setFavorites] = useState<string[]>(loadFavorites);
   const { state, dispatch, undo, storageError } = useGraphReducer();
 
   const [nameDraft, setNameDraft] = useState(state.name);
@@ -59,6 +75,10 @@ export function AppShell() {
   useEffect(() => {
     try { localStorage.setItem(HIDDEN_CATEGORIES_KEY, JSON.stringify(hiddenCategories)); } catch { /* ignore */ }
   }, [hiddenCategories]);
+
+  useEffect(() => {
+    try { localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites)); } catch { /* ignore */ }
+  }, [favorites]);
 
   return (
     <div className={styles.shell}>
@@ -101,6 +121,8 @@ export function AppShell() {
               state={state}
               hiddenCategories={hiddenCategories}
               onHiddenCategoriesChange={setHiddenCategories}
+              favorites={favorites}
+              onFavoritesChange={setFavorites}
             />
           </ErrorBoundary>
         )}
