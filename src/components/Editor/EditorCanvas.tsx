@@ -159,12 +159,13 @@ export function EditorCanvas({
   }, [activeSectionId, building.sections, redraw, isSmall, onResize, onAutoFit]);
 
   // Close the edge editor popup if its edge was deleted elsewhere (keyboard shortcut,
-  // sidebar delete button) — not just via this popup's own Delete Edge button.
-  useEffect(() => {
-    if (edgeEditor && !building.edges.some((e) => e.id === edgeEditor.edgeId)) {
-      setEdgeEditor(null);
-    }
-  }, [building.edges, edgeEditor]);
+  // sidebar delete button) — not just via this popup's own Delete Edge button. Adjusting
+  // state during render, rather than in an effect, is React's recommended pattern for
+  // reacting to a prop/state change like this — see the other examples in Editor.tsx
+  // and NavigatorCanvas.tsx: https://react.dev/learn/you-might-not-need-an-effect
+  if (edgeEditor && !building.edges.some((e) => e.id === edgeEditor.edgeId)) {
+    setEdgeEditor(null);
+  }
 
   // Wheel zoom (non-passive so we can preventDefault)
   useEffect(() => {
