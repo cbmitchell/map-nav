@@ -88,6 +88,8 @@ export function EditorCanvas({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const labelPopupRef = useRef<HTMLDivElement>(null);
+  const edgePopupRef = useRef<HTMLDivElement>(null);
   const contentHRef = useRef(0);
   const dragRef = useRef<{ nodeId: string; moved: boolean } | null>(null);
   const panRef = useRef<{ lastX: number; lastY: number } | null>(null);
@@ -956,6 +958,23 @@ export function EditorCanvas({
 
   const closePopups = () => { setLabelEditor(null); setEdgeEditor(null); setCalibratePopup(null); onEditorStateChange({ calibrateA: null, calibrateB: null }); };
 
+  // Clamp the label/edge editor popups so they never extend past the bottom of the
+  // visible canvas — measured against each popup's actual rendered height (which
+  // varies with its content) rather than a fixed guess, so it stays correct however
+  // many fields a popup happens to be showing.
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || isSmall) return;
+    const margin = 8;
+    const clamp = (el: HTMLDivElement | null, desiredTop: number) => {
+      if (!el) return;
+      const maxTop = Math.max(margin, canvas.height - el.offsetHeight - margin);
+      el.style.top = `${Math.max(margin, Math.min(desiredTop, maxTop))}px`;
+    };
+    if (labelEditor) clamp(labelPopupRef.current, labelEditor.screenY + 16);
+    if (edgeEditor) clamp(edgePopupRef.current, edgeEditor.screenY + 8);
+  }, [labelEditor, edgeEditor, isSmall]);
+
   return (
     <div ref={containerRef} className={popupStyles.container} onMouseLeave={handleMouseLeave}>
       {!hasImage && (
@@ -982,6 +1001,7 @@ export function EditorCanvas({
         <>
           {isSmall && <div className={popupStyles.sheetBackdrop} onClick={closePopups} />}
           <div
+            ref={labelPopupRef}
             className={isSmall ? popupStyles.bottomSheet : popupStyles.popup}
             style={isSmall ? undefined : {
               left: Math.min(labelEditor.screenX + 12, canvasW - 220),
@@ -1094,6 +1114,7 @@ export function EditorCanvas({
         <>
           {isSmall && <div className={popupStyles.sheetBackdrop} onClick={closePopups} />}
           <div
+            ref={edgePopupRef}
             className={isSmall ? popupStyles.bottomSheet : popupStyles.popup}
             style={isSmall ? undefined : {
               left: Math.min(edgeEditor.screenX + 8, canvasW - 200),
