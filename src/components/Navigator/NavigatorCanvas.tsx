@@ -55,6 +55,7 @@ export function NavigatorCanvas({
   const isSmall = isMobile || isTablet;
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   // Content height (image-aspect-ratio height), distinct from canvas.height which on
   // mobile/tablet can be taller so zoomed content isn't clipped. Node positions are
   // drawn against this, not the raw canvas element height — see useCanvasRenderer.
@@ -386,6 +387,18 @@ export function NavigatorCanvas({
 
   // ---------------------------------------------------------------------------
 
+  // Clamp the node context menu so it never extends past the bottom of the visible
+  // canvas — measured against its actual rendered height (which varies with which
+  // buttons are shown) rather than a fixed guess.
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current;
+    const menu = menuRef.current;
+    if (!canvas || !menu || !nodeMenu || isSmall) return;
+    const margin = 8;
+    const maxTop = Math.max(margin, canvas.height - menu.offsetHeight - margin);
+    menu.style.top = `${Math.max(margin, Math.min(nodeMenu.screenY + 8, maxTop))}px`;
+  }, [nodeMenu, isSmall]);
+
   const section = building.sections.find((s) => s.id === activeSectionId);
   const hasImage = !!section?.imageData;
 
@@ -417,6 +430,7 @@ export function NavigatorCanvas({
         <>
           {isSmall && <div className={styles.menuBackdrop} onClick={() => setNodeMenu(null)} />}
           <div
+            ref={menuRef}
             className={isSmall ? styles.menuSheet : styles.menu}
             style={isSmall ? undefined : {
               left: Math.min(nodeMenu.screenX + 8, nodeMenu.canvasW - 160),
