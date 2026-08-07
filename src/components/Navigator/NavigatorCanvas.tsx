@@ -24,6 +24,7 @@ interface NavigatorCanvasProps {
   building: Building;
   activeSectionId: string | null;
   path: string[] | null;
+  currentStepNodeIds: string[] | null;
   zoomPan: ZoomPanState;
   onWheel: (e: WheelEvent, rect: DOMRect) => void;
   onPan: (dx: number, dy: number) => void;
@@ -40,6 +41,7 @@ export function NavigatorCanvas({
   building,
   activeSectionId,
   path,
+  currentStepNodeIds,
   zoomPan,
   onWheel,
   onPan,
@@ -144,18 +146,20 @@ export function NavigatorCanvas({
     return () => observer.disconnect();
   }, [activeSectionId, building.sections, redraw, isSmall, onAutoFit]);
 
-  // Auto-fit the view to the selected path's nodes in the currently displayed section.
-  // Re-runs whenever the path or the active section changes (including stepping through
-  // a multi-section path), overriding whatever zoom/pan was there before.
+  // Auto-fit the view to the current step's path nodes in the currently displayed
+  // section. Scoped to just this step's node-ID range (not every node the path touches
+  // in this section across all its visits), so a path that revisits a floor frames each
+  // visit tightly instead of zooming out to fit both together. Re-runs whenever the path
+  // or the active step changes, overriding whatever zoom/pan was there before.
   useLayoutEffect(() => {
-    if (!path) return;
+    if (!path || !currentStepNodeIds) return;
     const container = containerRef.current;
     const canvas = canvasRef.current;
     if (!container || !canvas) return;
 
-    const pathNodeSet = new Set(path);
+    const stepNodeIdSet = new Set(currentStepNodeIds);
     const pathNodesInSection = buildingRef.current.nodes.filter(
-      (n) => n.sectionId === activeSectionIdRef.current && pathNodeSet.has(n.id),
+      (n) => n.sectionId === activeSectionIdRef.current && stepNodeIdSet.has(n.id),
     );
     if (pathNodesInSection.length === 0) return;
 
@@ -175,7 +179,7 @@ export function NavigatorCanvas({
       container.clientHeight,
       PATH_FIT_PADDING,
     ));
-  }, [path, activeSectionId, onAutoFit]);
+  }, [path, activeSectionId, currentStepNodeIds, onAutoFit]);
 
   // Wheel zoom (non-passive)
   useEffect(() => {
