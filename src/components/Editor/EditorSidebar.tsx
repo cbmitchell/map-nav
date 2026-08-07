@@ -442,9 +442,9 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
         </div>
       <CollapsibleSection title="Sections" storageKey="editor-sections">
         <div className={styles.sectionList}>
-          {groupSectionsByBuilding(building.sections).map(({ building: buildingName, sections: groupSections }) => (
+          {groupSectionsByBuilding(building.sections).map(({ building: buildingName, showLabel, sections: groupSections }) => (
             <div key={buildingName}>
-              <div className={styles.buildingGroupLabel}>{buildingName}</div>
+              {showLabel && <div className={styles.buildingGroupLabel}>{buildingName}</div>}
               {groupSections.map((s) => (
                 <div key={s.id}>
                   <div

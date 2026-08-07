@@ -280,9 +280,9 @@ export function NavigatorControls({
 
   const sectionsContent = (
     <div className={styles.sectionList}>
-      {groupSectionsByBuilding(building.sections).map(({ building: buildingName, sections }) => (
+      {groupSectionsByBuilding(building.sections).map(({ building: buildingName, showLabel, sections }) => (
         <div key={buildingName}>
-          <div className={styles.buildingGroupLabel}>{buildingName}</div>
+          {showLabel && <div className={styles.buildingGroupLabel}>{buildingName}</div>}
           {sections.map((s) => (
             <div
               key={s.id}

@@ -9,7 +9,12 @@ export function getDistinctBuildings(sections: Section[]): string[] {
 // Groups sections by building (alphabetical; unassigned sections grouped last under
 // NO_BUILDING_LABEL), each group's sections ordered by floor descending (higher floors
 // first, per "higher floors at the top of the list"), ties broken alphabetically by name.
-export function groupSectionsByBuilding(sections: Section[]): { building: string; sections: Section[] }[] {
+// `showLabel` is false for the NO_BUILDING_LABEL group when no building has been
+// defined anywhere yet — with nothing to distinguish it from, a "(No building)" header
+// would be pure noise, so it should only appear once at least one real building exists.
+export function groupSectionsByBuilding(
+  sections: Section[],
+): { building: string; showLabel: boolean; sections: Section[] }[] {
   const groups = new Map<string, Section[]>();
   for (const s of sections) {
     const key = s.building?.trim() || NO_BUILDING_LABEL;
@@ -20,6 +25,7 @@ export function groupSectionsByBuilding(sections: Section[]): { building: string
   const orderedKeys = groups.has(NO_BUILDING_LABEL) ? [...namedBuildings, NO_BUILDING_LABEL] : namedBuildings;
   return orderedKeys.map((building) => ({
     building,
+    showLabel: building !== NO_BUILDING_LABEL || namedBuildings.length > 0,
     sections: groups.get(building)!.sort((a, b) => b.floor - a.floor || a.name.localeCompare(b.name)),
   }));
 }
