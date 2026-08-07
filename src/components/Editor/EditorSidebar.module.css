@@ -74,6 +74,15 @@
   flex-shrink: 0;
 }
 
+.buildingGroupLabel {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-ghost);
+  padding: 6px 12px 2px;
+}
+
 .sectionItem {
   display: flex;
   align-items: center;

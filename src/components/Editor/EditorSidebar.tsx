@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useId } from 'react';
 import clsx from 'clsx';
 import type { Dispatch, SetStateAction } from 'react';
 import type { Building } from '../../types/graph';
@@ -6,6 +6,7 @@ import type { Action } from '../../hooks/useGraphReducer';
 import type { EdgeTypeDef } from '../../types/graph';
 import { loadPdf, renderPdfPage } from '../../utils/pdf';
 import { generateId } from '../../utils/id';
+import { getDistinctBuildings, groupSectionsByBuilding } from '../../utils/buildings';
 import { CollapsibleSection } from '../shared/CollapsibleSection';
 import styles from './EditorSidebar.module.css';
 
@@ -26,9 +27,11 @@ interface EditorSidebarProps {
 interface SectionFormProps {
   name: string;
   floor: string;
+  building: string;
   file: File | null;
   onNameChange: (v: string) => void;
   onFloorChange: (v: string) => void;
+  onBuildingChange: (v: string) => void;
   onFileChange: (f: File | null) => void;
   onSubmit: () => void;
   onCancel: () => void;
@@ -37,18 +40,21 @@ interface SectionFormProps {
   submitDisabled: boolean;
   filePlaceholder: string;
   fileAccept: string;
+  existingBuildings: string[];
   autoFocus?: boolean;
 }
 
 function SectionForm({
-  name, floor, file,
-  onNameChange, onFloorChange, onFileChange,
+  name, floor, building, file,
+  onNameChange, onFloorChange, onBuildingChange, onFileChange,
   onSubmit, onCancel,
   submitLabel, submitting, submitDisabled,
   filePlaceholder, fileAccept,
+  existingBuildings,
   autoFocus = false,
 }: SectionFormProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const buildingListId = useId();
 
   const handleKey = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') onSubmit();
@@ -76,6 +82,22 @@ function SectionForm({
           onChange={(e) => onFloorChange(e.target.value)}
           onKeyDown={handleKey}
         />
+      </div>
+      <div className={styles.formRow}>
+        <label className={styles.formLabel}>Building</label>
+        <input
+          className={styles.formInput}
+          placeholder="e.g. Tower 1"
+          value={building}
+          onChange={(e) => onBuildingChange(e.target.value)}
+          onKeyDown={handleKey}
+          list={buildingListId}
+        />
+        <datalist id={buildingListId}>
+          {existingBuildings.map((b) => (
+            <option key={b} value={b} />
+          ))}
+        </datalist>
       </div>
       <button className={styles.fileBtn} onClick={() => fileInputRef.current?.click()}>
         {file ? file.name : filePlaceholder}
@@ -236,16 +258,17 @@ function EdgeTypeForm({ form, setForm, error, onSubmit, onCancel, submitLabel, a
 interface FormState {
   name: string;
   floor: string;
+  building: string;
   file: File | null;
 }
 
 export function EditorSidebar({ building, activeSectionId, onSectionChange, dispatch, isMobileOrTablet, isOpen, onClose }: EditorSidebarProps) {
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<FormState>({ name: '', floor: '', file: null });
+  const [form, setForm] = useState<FormState>({ name: '', floor: '', building: '', file: null });
   const [importing, setImporting] = useState(false);
 
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<FormState>({ name: '', floor: '', file: null });
+  const [editForm, setEditForm] = useState<FormState>({ name: '', floor: '', building: '', file: null });
   const [editImporting, setEditImporting] = useState(false);
 
   const [showEtForm, setShowEtForm] = useState(false);
@@ -256,13 +279,19 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
   const [editEtForm, setEditEtForm] = useState<EdgeTypeFormState>(DEFAULT_ET_FORM);
   const [editEtError, setEditEtError] = useState('');
 
-  const nextFloor =
-    building.sections.length > 0
-      ? Math.max(...building.sections.map((s) => s.floor)) + 1
-      : 1;
+  // Default a new section to the currently active section's building, so adding a
+  // floor while browsing a given building doesn't start out unassigned — and scope
+  // "next floor" to that same building's sections, since a global max across every
+  // building would suggest a meaningless floor number once more than one exists.
+  const defaultBuilding = building.sections.find((s) => s.id === activeSectionId)?.building ?? '';
+  const buildingSections = defaultBuilding
+    ? building.sections.filter((s) => s.building === defaultBuilding)
+    : building.sections;
+  const nextFloor = buildingSections.length > 0 ? Math.max(...buildingSections.map((s) => s.floor)) + 1 : 1;
+  const existingBuildings = getDistinctBuildings(building.sections);
 
   const openForm = () => {
-    setForm({ name: `Floor ${nextFloor}`, floor: String(nextFloor), file: null });
+    setForm({ name: `Floor ${nextFloor}`, floor: String(nextFloor), building: defaultBuilding, file: null });
     setShowForm(true);
   };
 
@@ -272,6 +301,7 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
     try {
       const name = form.name.trim() || `Floor ${form.floor}`;
       const floor = parseInt(form.floor, 10) || 1;
+      const buildingName = form.building.trim() || undefined;
       const file = form.file;
 
       if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
@@ -292,7 +322,7 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
           const sectionName = pages.length > 1 ? (i === 0 ? name : `${name} – Page ${pages[i]}`) : name;
           dispatch({
             type: 'ADD_SECTION',
-            payload: { id, name: sectionName, floor: floor + i, imageData, imageW, imageH },
+            payload: { id, name: sectionName, floor: floor + i, imageData, imageW, imageH, building: buildingName },
           });
           if (firstId === null) firstId = id;
         }
@@ -307,7 +337,7 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
               const id = generateId();
               dispatch({
                 type: 'ADD_SECTION',
-                payload: { id, name, floor, imageData, imageW: img.naturalWidth, imageH: img.naturalHeight },
+                payload: { id, name, floor, imageData, imageW: img.naturalWidth, imageH: img.naturalHeight, building: buildingName },
               });
               onSectionChange(id);
               resolve();
@@ -327,9 +357,9 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
     }
   };
 
-  const startEdit = (id: string, currentName: string, currentFloor: number) => {
+  const startEdit = (id: string, currentName: string, currentFloor: number, currentBuilding?: string) => {
     setEditingSectionId(id);
-    setEditForm({ name: currentName, floor: String(currentFloor), file: null });
+    setEditForm({ name: currentName, floor: String(currentFloor), building: currentBuilding ?? '', file: null });
   };
 
   const commitEdit = async () => {
@@ -337,7 +367,10 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
     const name = editForm.name.trim();
     const floor = parseInt(editForm.floor, 10);
     if (name) {
-      dispatch({ type: 'UPDATE_SECTION', payload: { id: editingSectionId, name, floor: isNaN(floor) ? undefined : floor } });
+      dispatch({
+        type: 'UPDATE_SECTION',
+        payload: { id: editingSectionId, name, floor: isNaN(floor) ? undefined : floor, building: editForm.building.trim() || undefined },
+      });
     }
     if (editForm.file) {
       setEditImporting(true);
@@ -409,58 +442,66 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
         </div>
       <CollapsibleSection title="Sections" storageKey="editor-sections">
         <div className={styles.sectionList}>
-          {[...building.sections].sort((a, b) => a.name.localeCompare(b.name)).map((s) => (
-            <div key={s.id}>
-              <div
-                className={clsx(styles.sectionItem, s.id === activeSectionId && styles.sectionItemActive)}
-                onClick={() => { if (editingSectionId !== s.id) { onSectionChange(s.id); if (isMobileOrTablet) onClose(); } }}
-              >
-                <span className={styles.sectionName}>{s.name}</span>
-                <span className={styles.sectionFloor}>F{s.floor}</span>
-                {editingSectionId !== s.id && (
-                  <>
-                    <button
-                      className={styles.renameBtn}
-                      title="Edit section"
-                      onClick={(e) => { e.stopPropagation(); startEdit(s.id, s.name, s.floor); }}
-                    >
-                      ✎
-                    </button>
-                    <button
-                      className={styles.deleteBtn}
-                      title="Delete section"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (window.confirm(`Delete "${s.name}"? All nodes and edges on this floor will also be removed.`)) {
-                          dispatch({ type: 'DELETE_SECTION', payload: { id: s.id } });
-                        }
-                      }}
-                    >
-                      ×
-                    </button>
-                  </>
-                )}
-              </div>
-              {editingSectionId === s.id && (
-                <div className={styles.editForm}>
-                  <SectionForm
-                    name={editForm.name}
-                    floor={editForm.floor}
-                    file={editForm.file}
-                    onNameChange={(v) => setEditForm((p) => ({ ...p, name: v }))}
-                    onFloorChange={(v) => setEditForm((p) => ({ ...p, floor: v }))}
-                    onFileChange={(f) => setEditForm((p) => ({ ...p, file: f }))}
-                    onSubmit={commitEdit}
-                    onCancel={() => setEditingSectionId(null)}
-                    submitLabel="Save"
-                    submitting={editImporting}
-                    submitDisabled={editImporting}
-                    filePlaceholder="Replace image…"
-                    fileAccept="image/*"
-                    autoFocus
-                  />
+          {groupSectionsByBuilding(building.sections).map(({ building: buildingName, sections: groupSections }) => (
+            <div key={buildingName}>
+              <div className={styles.buildingGroupLabel}>{buildingName}</div>
+              {groupSections.map((s) => (
+                <div key={s.id}>
+                  <div
+                    className={clsx(styles.sectionItem, s.id === activeSectionId && styles.sectionItemActive)}
+                    onClick={() => { if (editingSectionId !== s.id) { onSectionChange(s.id); if (isMobileOrTablet) onClose(); } }}
+                  >
+                    <span className={styles.sectionName}>{s.name}</span>
+                    <span className={styles.sectionFloor}>F{s.floor}</span>
+                    {editingSectionId !== s.id && (
+                      <>
+                        <button
+                          className={styles.renameBtn}
+                          title="Edit section"
+                          onClick={(e) => { e.stopPropagation(); startEdit(s.id, s.name, s.floor, s.building); }}
+                        >
+                          ✎
+                        </button>
+                        <button
+                          className={styles.deleteBtn}
+                          title="Delete section"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm(`Delete "${s.name}"? All nodes and edges on this floor will also be removed.`)) {
+                              dispatch({ type: 'DELETE_SECTION', payload: { id: s.id } });
+                            }
+                          }}
+                        >
+                          ×
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  {editingSectionId === s.id && (
+                    <div className={styles.editForm}>
+                      <SectionForm
+                        name={editForm.name}
+                        floor={editForm.floor}
+                        building={editForm.building}
+                        file={editForm.file}
+                        onNameChange={(v) => setEditForm((p) => ({ ...p, name: v }))}
+                        onFloorChange={(v) => setEditForm((p) => ({ ...p, floor: v }))}
+                        onBuildingChange={(v) => setEditForm((p) => ({ ...p, building: v }))}
+                        onFileChange={(f) => setEditForm((p) => ({ ...p, file: f }))}
+                        onSubmit={commitEdit}
+                        onCancel={() => setEditingSectionId(null)}
+                        submitLabel="Save"
+                        submitting={editImporting}
+                        submitDisabled={editImporting}
+                        filePlaceholder="Replace image…"
+                        fileAccept="image/*"
+                        existingBuildings={existingBuildings}
+                        autoFocus
+                      />
+                    </div>
+                  )}
                 </div>
-              )}
+              ))}
             </div>
           ))}
         </div>
@@ -470,9 +511,11 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
             <SectionForm
               name={form.name}
               floor={form.floor}
+              building={form.building}
               file={form.file}
               onNameChange={(v) => setForm((p) => ({ ...p, name: v }))}
               onFloorChange={(v) => setForm((p) => ({ ...p, floor: v }))}
+              onBuildingChange={(v) => setForm((p) => ({ ...p, building: v }))}
               onFileChange={(f) => setForm((p) => ({ ...p, file: f }))}
               onSubmit={handleSubmit}
               onCancel={() => setShowForm(false)}
@@ -481,6 +524,7 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
               submitDisabled={!form.file || importing}
               filePlaceholder="Choose image or PDF…"
               fileAccept="image/*,application/pdf"
+              existingBuildings={existingBuildings}
               autoFocus
             />
           </div>

@@ -7,6 +7,7 @@ import { CollapsibleSection } from '../shared/CollapsibleSection';
 import { SearchableSelect } from '../shared/SearchableSelect';
 import type { SearchableSelectOption } from '../shared/SearchableSelect';
 import { getDistinctCategories } from '../../utils/categories';
+import { groupSectionsByBuilding } from '../../utils/buildings';
 import styles from './NavigatorControls.module.css';
 
 interface NavigatorControlsProps {
@@ -279,14 +280,19 @@ export function NavigatorControls({
 
   const sectionsContent = (
     <div className={styles.sectionList}>
-      {[...building.sections].sort((a, b) => a.name.localeCompare(b.name)).map((s) => (
-        <div
-          key={s.id}
-          className={clsx(styles.sectionItem, s.id === activeSectionId && styles.sectionItemActive)}
-          onClick={() => onSectionChange(s.id)}
-        >
-          <span className={styles.sectionName}>{s.name}</span>
-          <span className={styles.sectionFloor}>F{s.floor}</span>
+      {groupSectionsByBuilding(building.sections).map(({ building: buildingName, sections }) => (
+        <div key={buildingName}>
+          <div className={styles.buildingGroupLabel}>{buildingName}</div>
+          {sections.map((s) => (
+            <div
+              key={s.id}
+              className={clsx(styles.sectionItem, s.id === activeSectionId && styles.sectionItemActive)}
+              onClick={() => onSectionChange(s.id)}
+            >
+              <span className={styles.sectionName}>{s.name}</span>
+              <span className={styles.sectionFloor}>F{s.floor}</span>
+            </div>
+          ))}
         </div>
       ))}
     </div>

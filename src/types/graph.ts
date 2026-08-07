@@ -28,6 +28,9 @@ export interface Section {
   imageW: number;
   imageH: number;
   scale?: number; // real-world units per image pixel; undefined = uncalibrated (treated as 1.0)
+  building?: string; // free-text building name, same "combo box creates new value on
+                      // entry" convention as Node.category; undefined = unassigned,
+                      // grouped under the "(No building)" placeholder
 }
 
 export interface Node {

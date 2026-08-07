@@ -5,6 +5,7 @@ import styles from './Navigator.module.css';
 import { usePathfinder } from '../../hooks/usePathfinder';
 import { findMarkerForEntrance } from '../../utils/roomEntrances';
 import { useZoomPan, DEFAULT_ZOOM_PAN } from '../../hooks/useZoomPan';
+import { getDefaultSection } from '../../utils/buildings';
 import type { ZoomPanState } from '../../hooks/useZoomPan';
 import { NavigatorControls } from './NavigatorControls';
 import { NavigatorCanvas } from './NavigatorCanvas';
@@ -26,7 +27,7 @@ export function Navigator({ state, hiddenCategories, onHiddenCategoriesChange, f
   const [excludedTypes, setExcludedTypes] = useState<Set<string>>(new Set());
   const [showDirections, setShowDirections] = useState(false);
   const [preferredSectionId, setPreferredSectionId] = useState<string | null>(null);
-  const activeSectionId = preferredSectionId ?? state.sections[0]?.id ?? null;
+  const activeSectionId = preferredSectionId ?? getDefaultSection(state.sections)?.id ?? null;
   // Tracks which occurrence of a (possibly repeated) path section is currently being
   // viewed. Set explicitly by switchSection's optional stepIndex arg when Prev/Next
   // trigger the switch; null for any other switch (origin pick, sidebar tab click), in

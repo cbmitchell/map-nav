@@ -13,7 +13,7 @@ import { saveImage, getAllImages, deleteImage } from '../utils/imageStore';
 export type Action =
   | { type: 'UPDATE_BUILDING_NAME'; payload: { name: string } }
   | { type: 'ADD_SECTION'; payload: Section }
-  | { type: 'UPDATE_SECTION'; payload: { id: string; name?: string; floor?: number } }
+  | { type: 'UPDATE_SECTION'; payload: { id: string; name?: string; floor?: number; building?: string } }
   | { type: 'UPDATE_SECTION_IMAGE'; payload: { id: string; imageData: string; imageW: number; imageH: number } }
   | { type: 'DELETE_SECTION'; payload: { id: string } }
   | { type: 'ADD_NODE'; payload: Node }
