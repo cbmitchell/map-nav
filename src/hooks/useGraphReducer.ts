@@ -93,6 +93,7 @@ function recalcLengthBasedWeights(
   const sectionScale = section?.scale ?? 1.0;
   const typeIndex = new Map(edgeTypes.map((t) => [t.id, t]));
   return edges.map((e) => {
+    if (e.crossSection) return e; // endpoints live in different section images — not euclidean-comparable
     const typeDef = typeIndex.get(e.type);
     if (!typeDef || typeDef.weightMode !== 'length') return e;
     if (e.srcId !== movedNodeId && e.tgtId !== movedNodeId) return e;
@@ -112,7 +113,7 @@ function nextCustomColor(edgeTypes: EdgeTypeDef[]): string {
 // Reducer
 // ---------------------------------------------------------------------------
 
-function reducer(state: Building, action: Action): Building {
+export function reducer(state: Building, action: Action): Building {
   switch (action.type) {
     case 'UPDATE_BUILDING_NAME': {
       return { ...state, name: action.payload.name };
@@ -206,7 +207,13 @@ function reducer(state: Building, action: Action): Building {
           const merged = { ...e, ...updates };
           if (updates.type && updates.type !== e.type) {
             const typeDef = typeIndex.get(merged.type);
-            if (typeDef) {
+            // Cross-section endpoints live in different section images — their nx/ny
+            // aren't euclidean-comparable, so a 'length' type can't be recomputed from
+            // position here. Matches the fixed nominal weight cross-section edges are
+            // given at creation time (EditorCanvas.tsx's link-mode edge creation).
+            if (typeDef && merged.crossSection && typeDef.weightMode === 'length') {
+              merged.weight = e.weight;
+            } else if (typeDef) {
               const src = state.nodes.find((n) => n.id === merged.srcId);
               const tgt = state.nodes.find((n) => n.id === merged.tgtId);
               if (src && tgt) {
@@ -378,10 +385,7 @@ function reducer(state: Building, action: Action): Building {
         const tgt = nodeIndex.get(e.tgtId);
         if (!src || !tgt || !walkway) return { ...e, type: 'walkway' };
         const section = state.sections.find((s) => s.id === src.sectionId);
-        const weight =
-          euclideanWeight(src, tgt, section?.imageW ?? 1, section?.imageH ?? 1) *
-          walkway.lengthScalar *
-          (section?.scale ?? 1.0);
+        const weight = computeEdgeWeight(walkway, src, tgt, section?.imageW ?? 1, section?.imageH ?? 1, section?.scale ?? 1.0);
         return { ...e, type: 'walkway', weight };
       });
       return {
@@ -418,6 +422,7 @@ const MAX_UNDO = 10;
 export function useGraphReducer() {
   const [state, baseDispatch] = useReducer(reducer, undefined, loadFromStorage);
   const [storageError, setStorageError] = useState(false);
+  const [imageStorageError, setImageStorageError] = useState(false);
 
   const undoStack = useRef<Building[]>([]);
   const stateRef = useRef(state);
@@ -469,7 +474,12 @@ export function useGraphReducer() {
     for (const section of state.sections) {
       if (section.imageData && savedImageDataRef.current.get(section.id) !== section.imageData) {
         savedImageDataRef.current.set(section.id, section.imageData);
-        saveImage(section.id, section.imageData).catch(console.error);
+        saveImage(section.id, section.imageData)
+          .then(() => setImageStorageError(false))
+          .catch((err) => {
+            console.error(err);
+            setImageStorageError(true);
+          });
       }
     }
 
@@ -477,7 +487,10 @@ export function useGraphReducer() {
     const currentIds = new Set(state.sections.map((s) => s.id));
     for (const prevId of prevSectionIdsRef.current) {
       if (!currentIds.has(prevId)) {
-        deleteImage(prevId).catch(console.error);
+        deleteImage(prevId).catch((err) => {
+          console.error(err);
+          setImageStorageError(true);
+        });
         savedImageDataRef.current.delete(prevId);
       }
     }
@@ -524,5 +537,5 @@ export function useGraphReducer() {
     hydrateImages();
   }, []); // runs once on mount — all mutable values accessed via refs
 
-  return { state, dispatch, undo, storageError };
+  return { state, dispatch, undo, storageError, imageStorageError };
 }

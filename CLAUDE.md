@@ -64,6 +64,7 @@ src/
     export.ts                # serialize/deserialize graph bundle (base64-in-JSON)
     pathfinding.ts           # Dijkstra algorithm (pure function, no React)
     roomEntrances.ts         # room marker/entrance resolution (pure function, no React)
+    buildings.ts             # groups sections by Section.building (pure function, no React)
     pdf.ts                   # PDF import utility
     id.ts                    # ID generation (generateId wrapping crypto.randomUUID)
     imageStore.ts            # IndexedDB CRUD for section images (save/getAll/delete)
@@ -107,6 +108,10 @@ interface Section {
   imageW: number;       // natural image width in pixels
   imageH: number;       // natural image height in pixels
   scale?: number;       // real-world units per image pixel; undefined = uncalibrated (treated as 1.0)
+  building?: string;    // free-text building name, same "combo box creates new value on
+                         // entry" convention as Node.category; undefined = unassigned,
+                         // grouped under the "(No building)" placeholder — see
+                         // src/utils/buildings.ts
 }
 
 interface Node {
@@ -121,6 +126,7 @@ interface Node {
   isRoomMarker?: boolean; // true = this room node's entrances are defined by its
                          // "Room Entrance" edges rather than being routable itself —
                          // see "Multi-entrance rooms" under Navigator mode
+  aliases?: string[];    // alternate searchable names; meaningful only when isRoom === true
 }
 
 interface Edge {
@@ -307,10 +313,16 @@ its `room-entrance` edges — there is no separate list or collection.
   real graph, via `dijkstraBetweenSets()`). That entrance then visually *becomes* the
   room for the duration of the route (room styling, the marker's label), while the
   marker itself hides — exactly one node ever represents a given room on screen at a
-  time. Unrelated rooms elsewhere are unaffected. See `src/utils/roomEntrances.ts`
-  (`resolveRoomCandidates()`, `findMarkerForEntrance()`) and the room-marker-specific
-  block in `useCanvasRenderer.ts`'s node-drawing logic (gated on a `isNavigator` param
-  the hook takes — Editor always renders every node/edge as-is, unaffected).
+  time. Unrelated rooms elsewhere are unaffected. `usePathfinder()` tracks which
+  originally-selected room (marker or plain room) each path endpoint resolved from as
+  `originRoomId`/`destinationRoomId`, since re-deriving it from the entrance's own edges
+  is ambiguous whenever one entrance is shared by more than one marker.
+  `getImpersonatingMarker(nodes, roomId)` in `src/utils/roomEntrances.ts` (alongside
+  `resolveRoomCandidates()`) looks up the marker for an already-resolved room id, used
+  by both the room-marker-specific block in `useCanvasRenderer.ts`'s node-drawing logic
+  (gated on the `isNavigator` param — Editor always renders every node/edge as-is,
+  unaffected) and by `NavigatorCanvas.tsx`'s click hit-testing, so the impersonating
+  entrance stays clickable for reopening the "Set origin/destination" menu mid-route.
 - A marker with zero entrances can never be routed to; the Editor flags this with a red
   warning ring on the node and a note in its label popup, so it's caught while
   authoring rather than surfacing as a confusing "No route found" later.

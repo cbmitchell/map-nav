@@ -18,9 +18,10 @@ interface EditorProps {
   dispatch: Dispatch<Action>;
   undo: () => void;
   storageError: boolean;
+  imageStorageError: boolean;
 }
 
-export function Editor({ state, dispatch, undo, storageError }: EditorProps) {
+export function Editor({ state, dispatch, undo, storageError, imageStorageError }: EditorProps) {
   const { isMobile, isTablet } = useMobile();
   const isMobileOrTablet = isMobile || isTablet;
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -200,6 +201,12 @@ export function Editor({ state, dispatch, undo, storageError }: EditorProps) {
       {storageError && (
         <div className={styles.storageWarning}>
           Storage full — changes are not being saved. Export your work, then clear browser storage to continue.
+        </div>
+      )}
+      {imageStorageError && (
+        <div className={styles.storageWarning}>
+          Couldn't save a map image — image storage is unavailable (private browsing, blocked, or full). Export
+          your work to avoid losing it.
         </div>
       )}
       <EditorToolbar

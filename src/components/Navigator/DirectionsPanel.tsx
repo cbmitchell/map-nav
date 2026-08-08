@@ -37,6 +37,11 @@ export function DirectionsPanel({ building, path, originLabel, destinationLabel 
 
     if (i === 0) {
       steps.push({ kind: 'start', label: `Start at ${originLabel || node.label || '(origin)'}` });
+      // A single-node path is both endpoints at once — fall through to also emit the
+      // arrive line below rather than stopping here.
+      if (path.length === 1) {
+        steps.push({ kind: 'arrive', label: `Arrive at ${destinationLabel || node.label || '(destination)'}` });
+      }
       continue;
     }
 

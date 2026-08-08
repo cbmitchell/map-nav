@@ -4,6 +4,7 @@ import type { ZoomPanState } from '../../hooks/useZoomPan';
 import { fitZoomPan, DEFAULT_ZOOM_PAN } from '../../hooks/useZoomPan';
 import { useCanvasRenderer } from '../../hooks/useCanvasRenderer';
 import { useMobile } from '../../hooks/useMobile';
+import { getImpersonatingMarker } from '../../utils/roomEntrances';
 import styles from './NavigatorCanvas.module.css';
 
 const HIT_RADIUS = 12;
@@ -85,6 +86,21 @@ export function NavigatorCanvas({
   });
 
   const pathNodeSet = useMemo(() => (path ? new Set(path) : null), [path]);
+
+  // While routing, a multi-entrance room's marker is hidden and the resolved entrance
+  // visually "becomes" the room instead (see useCanvasRenderer.ts). That entrance isn't
+  // itself isRoom, so it needs to be separately hit-testable here — and clicking it
+  // should resolve back to the marker's own id/label, since that's what routing and the
+  // origin/destination selects actually operate on.
+  const impersonatingEntrances = useMemo(() => {
+    const map = new Map<string, { id: string; label: string }>();
+    if (!path || path.length === 0) return map;
+    const originMarker = getImpersonatingMarker(building.nodes, originRoomId);
+    if (originMarker) map.set(path[0], { id: originMarker.id, label: originMarker.label });
+    const destinationMarker = getImpersonatingMarker(building.nodes, destinationRoomId);
+    if (destinationMarker) map.set(path[path.length - 1], { id: destinationMarker.id, label: destinationMarker.label });
+    return map;
+  }, [path, building.nodes, originRoomId, destinationRoomId]);
 
   // Close the click/tap node menu when the active section changes — its screen-space
   // position is meaningless after switching sections. Adjusting state during render —
@@ -239,7 +255,7 @@ export function NavigatorCanvas({
   const hitTestRoomNode = (sx: number, sy: number): { id: string; label: string } | null => {
     const canvas = canvasRef.current!;
     const sectionNodes = buildingRef.current.nodes.filter(
-      (n) => n.sectionId === activeSectionIdRef.current && n.isRoom &&
+      (n) => n.sectionId === activeSectionIdRef.current && (n.isRoom || impersonatingEntrances.has(n.id)) &&
         (!n.category || !hiddenCategoriesRef.current.has(n.category) || (pathNodeSet !== null && pathNodeSet.has(n.id))),
     );
 
@@ -254,7 +270,8 @@ export function NavigatorCanvas({
       const dist = Math.hypot(sx - nodeScreenX, sy - nodeScreenY);
       if (dist < HIT_RADIUS && dist < bestDist) {
         bestDist = dist;
-        hit = { id: node.id, label: node.label || '(unlabeled)' };
+        const override = impersonatingEntrances.get(node.id);
+        hit = override ?? { id: node.id, label: node.label || '(unlabeled)' };
       }
     }
     return hit;

@@ -52,7 +52,7 @@ export function AppShell() {
   const [mode, setMode] = useState<AppMode>(loadMode);
   const [hiddenCategories, setHiddenCategories] = useState<string[]>(loadHiddenCategories);
   const [favorites, setFavorites] = useState<string[]>(loadFavorites);
-  const { state, dispatch, undo, storageError } = useGraphReducer();
+  const { state, dispatch, undo, storageError, imageStorageError } = useGraphReducer();
 
   const [nameDraft, setNameDraft] = useState(state.name);
   const nameFocusedRef = useRef(false);
@@ -113,7 +113,13 @@ export function AppShell() {
       <main className={styles.main}>
         {mode === 'editor' ? (
           <ErrorBoundary label="Editor">
-            <Editor state={state} dispatch={dispatch} undo={undo} storageError={storageError} />
+            <Editor
+              state={state}
+              dispatch={dispatch}
+              undo={undo}
+              storageError={storageError}
+              imageStorageError={imageStorageError}
+            />
           </ErrorBoundary>
         ) : (
           <ErrorBoundary label="Navigator">
