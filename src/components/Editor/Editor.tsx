@@ -157,6 +157,32 @@ export function Editor({ state, dispatch, undo, storageError, imageStorageError 
     setEditorState((prev) => ({ ...prev, ...update }));
   };
 
+  // Drops the user straight into image realignment right after a section's image is
+  // swapped, since the new image likely no longer lines up with existing annotations.
+  const handleSectionImageReplaced = useCallback(
+    (sectionId: string) => {
+      // Only actually switch sections if needed — EditorToolbar's swap always targets
+      // the already-active section, and switching unconditionally would needlessly
+      // reset that section's remembered zoom/pan (only EditorSidebar's edit form can
+      // target a section that isn't currently active).
+      if (sectionId !== activeSectionId) {
+        handleSectionChange(sectionId);
+      }
+      setEditorState((prev) => ({
+        ...prev,
+        mode: 'adjust-image',
+        pendingEdgeSrcId: null,
+        pendingLinkSrc: null,
+        selectedNodeId: null,
+        selectedEdgeId: null,
+        calibrateA: null,
+        calibrateB: null,
+        lastPathNodeId: null,
+      }));
+    },
+    [activeSectionId, handleSectionChange],
+  );
+
   const handleDelete = () => {
     if (editorState.selectedNodeId) {
       dispatch({ type: 'DELETE_NODE', payload: { id: editorState.selectedNodeId } });
@@ -222,6 +248,7 @@ export function Editor({ state, dispatch, undo, storageError, imageStorageError 
         onZoomOut={handleZoomOut}
         onResetView={handleResetView}
         onSidebarToggle={() => setSidebarOpen((p) => !p)}
+        onSectionImageReplaced={handleSectionImageReplaced}
       />
       <div className={styles.body}>
         <EditorSidebar
@@ -232,6 +259,7 @@ export function Editor({ state, dispatch, undo, storageError, imageStorageError 
           isMobileOrTablet={isMobileOrTablet}
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
+          onSectionImageReplaced={handleSectionImageReplaced}
         />
         <div className={styles.canvasArea}>
           {state.sections.length === 0 ? (

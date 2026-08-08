@@ -139,7 +139,10 @@ export function useCanvasRenderer(
         imageCache.current.set(cacheKey, img);
       }
       if (img.complete && img.naturalWidth > 0) {
-        ctx.drawImage(img, 0, 0, W, contentH);
+        const offX = (section.imageOffsetX ?? 0) * W;
+        const offY = (section.imageOffsetY ?? 0) * contentH;
+        const s = section.imageScale ?? 1;
+        ctx.drawImage(img, offX, offY, W * s, contentH * s);
       }
     } else {
       ctx.fillStyle = '#222';

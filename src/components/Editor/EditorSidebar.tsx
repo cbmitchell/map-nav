@@ -18,6 +18,7 @@ interface EditorSidebarProps {
   isMobileOrTablet: boolean;
   isOpen: boolean;
   onClose: () => void;
+  onSectionImageReplaced: (sectionId: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -262,7 +263,7 @@ interface FormState {
   file: File | null;
 }
 
-export function EditorSidebar({ building, activeSectionId, onSectionChange, dispatch, isMobileOrTablet, isOpen, onClose }: EditorSidebarProps) {
+export function EditorSidebar({ building, activeSectionId, onSectionChange, dispatch, isMobileOrTablet, isOpen, onClose, onSectionImageReplaced }: EditorSidebarProps) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<FormState>({ name: '', floor: '', building: '', file: null });
   const [importing, setImporting] = useState(false);
@@ -382,6 +383,7 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
             const img = new Image();
             img.onload = () => {
               dispatch({ type: 'UPDATE_SECTION_IMAGE', payload: { id: editingSectionId!, imageData, imageW: img.naturalWidth, imageH: img.naturalHeight } });
+              onSectionImageReplaced(editingSectionId!);
               resolve();
             };
             img.onerror = () => reject(new Error('Image failed to load — file may be corrupt or unsupported.'));

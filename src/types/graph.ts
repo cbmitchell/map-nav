@@ -31,6 +31,11 @@ export interface Section {
   building?: string; // free-text building name, same "combo box creates new value on
                       // entry" convention as Node.category; undefined = unassigned,
                       // grouped under the "(No building)" placeholder
+  // Image draw transform, independent of node nx/ny — lets the user pan/rescale a
+  // newly swapped-in image to realign it under existing annotations. undefined = identity.
+  imageOffsetX?: number; // normalized fraction of content-rect width
+  imageOffsetY?: number; // normalized fraction of content-rect height
+  imageScale?: number;
 }
 
 export interface Node {

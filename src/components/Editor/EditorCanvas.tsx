@@ -92,6 +92,7 @@ export function EditorCanvas({
   const edgePopupRef = useRef<HTMLDivElement>(null);
   const contentHRef = useRef(0);
   const dragRef = useRef<{ nodeId: string; moved: boolean } | null>(null);
+  const imageDragRef = useRef<{ lastX: number; lastY: number; moved: boolean } | null>(null);
   const panRef = useRef<{ lastX: number; lastY: number } | null>(null);
   const pendingClickRef = useRef<{ startX: number; startY: number; panned: boolean } | null>(null);
   const touchRef = useRef<{ lastX: number; lastY: number; lastDist: number } | null>(null);
@@ -216,6 +217,7 @@ export function EditorCanvas({
     const canvas = canvasRef.current;
     if (!canvas) return;
     if (spaceRef.current) { canvas.style.cursor = panRef.current ? 'grabbing' : 'grab'; return; }
+    if (esRef.current.mode === 'adjust-image') { canvas.style.cursor = imageDragRef.current ? 'grabbing' : 'grab'; return; }
     if (hoverNodeRef.current) { canvas.style.cursor = 'pointer'; return; }
     const map: Record<string, string> = { select: 'default', node: 'crosshair', edge: 'cell', link: 'crosshair', calibrate: 'crosshair' };
     canvas.style.cursor = map[esRef.current.mode] ?? 'default';
@@ -515,6 +517,79 @@ export function EditorCanvas({
   };
 
   // ---------------------------------------------------------------------------
+  // Adjust-image mode: pan/rescale a section's image independent of node nx/ny,
+  // so a newly swapped-in image can be realigned under existing annotations.
+  // ---------------------------------------------------------------------------
+
+  const IMAGE_ZOOM_STEP = 0.25;
+  const IMAGE_MIN_SCALE = 0.1;
+  const IMAGE_MAX_SCALE = 8;
+
+  const getActiveSection = () =>
+    buildingRef.current.sections.find((s) => s.id === activeSectionIdRef.current) ?? null;
+
+  // Pans the active section's image by a delta given in raw screen px, converting
+  // through the current view zoom into normalized offset fractions. `coalesce` groups
+  // an in-progress drag into a single undo step, mirroring node-drag's `moved` gating.
+  const applyImageOffsetDelta = (dxScreen: number, dyScreen: number, coalesce: boolean) => {
+    const section = getActiveSection();
+    const canvas = canvasRef.current;
+    if (!section || !canvas) return;
+    const W = canvas.width;
+    const H = contentHRef.current;
+    const scale = zoomPanRef.current.scale;
+    dispatch({
+      type: 'UPDATE_SECTION_IMAGE_TRANSFORM',
+      payload: {
+        id: section.id,
+        imageOffsetX: (section.imageOffsetX ?? 0) + dxScreen / scale / W,
+        imageOffsetY: (section.imageOffsetY ?? 0) + dyScreen / scale / H,
+        imageScale: section.imageScale ?? 1,
+      },
+      coalesce,
+    });
+  };
+
+  // Rescales the active section's image by `factor`, anchored at the content-rect
+  // center (normalized 0.5, 0.5) so the visually-centered point stays fixed —
+  // same anchor-preserving formula as useZoomPan's zoomAt, applied to normalized
+  // offset/scale fields instead of pixel pan/scale.
+  const applyImageZoom = (factor: number) => {
+    const section = getActiveSection();
+    if (!section) return;
+    const prevScale = section.imageScale ?? 1;
+    const newScale = Math.min(IMAGE_MAX_SCALE, Math.max(IMAGE_MIN_SCALE, prevScale * factor));
+    const prevOffsetX = section.imageOffsetX ?? 0;
+    const prevOffsetY = section.imageOffsetY ?? 0;
+    const anchor = 0.5;
+    dispatch({
+      type: 'UPDATE_SECTION_IMAGE_TRANSFORM',
+      payload: {
+        id: section.id,
+        imageOffsetX: anchor - (anchor - prevOffsetX) * (newScale / prevScale),
+        imageOffsetY: anchor - (anchor - prevOffsetY) * (newScale / prevScale),
+        imageScale: newScale,
+      },
+    });
+  };
+
+  const handleImageZoomIn = () => applyImageZoom(1 + IMAGE_ZOOM_STEP);
+  const handleImageZoomOut = () => applyImageZoom(1 / (1 + IMAGE_ZOOM_STEP));
+
+  const handleImageReset = () => {
+    const section = getActiveSection();
+    if (!section) return;
+    dispatch({
+      type: 'UPDATE_SECTION_IMAGE_TRANSFORM',
+      payload: { id: section.id, imageOffsetX: 0, imageOffsetY: 0, imageScale: 1 },
+    });
+  };
+
+  const handleImageAdjustDone = () => {
+    onEditorStateChange({ mode: 'select' });
+  };
+
+  // ---------------------------------------------------------------------------
   // Mouse events
   // ---------------------------------------------------------------------------
 
@@ -534,6 +609,13 @@ export function EditorCanvas({
     // Space held — start pan (overrides all interactions)
     if (spaceRef.current) {
       panRef.current = { lastX: screen.x, lastY: screen.y };
+      if (canvasRef.current) canvasRef.current.style.cursor = 'grabbing';
+      return;
+    }
+
+    // Adjust-image mode — drag pans the image directly, no click/select competing for it
+    if (esRef.current.mode === 'adjust-image') {
+      imageDragRef.current = { lastX: screen.x, lastY: screen.y, moved: false };
       if (canvasRef.current) canvasRef.current.style.cursor = 'grabbing';
       return;
     }
@@ -650,6 +732,16 @@ export function EditorCanvas({
       dragRef.current.moved = true;
     }
 
+    // Drag image (adjust-image mode)
+    if (imageDragRef.current && es.mode === 'adjust-image') {
+      const dxScreen = screen.x - imageDragRef.current.lastX;
+      const dyScreen = screen.y - imageDragRef.current.lastY;
+      imageDragRef.current.lastX = screen.x;
+      imageDragRef.current.lastY = screen.y;
+      applyImageOffsetDelta(dxScreen, dyScreen, imageDragRef.current.moved);
+      imageDragRef.current.moved = true;
+    }
+
   };
 
   const handleMouseUp = (e: React.MouseEvent) => {
@@ -683,6 +775,10 @@ export function EditorCanvas({
       updateCursor();
     }
     dragRef.current = null;
+    if (imageDragRef.current) {
+      imageDragRef.current = null;
+      updateCursor();
+    }
   };
 
   const handleDblClick = (e: React.MouseEvent) => {
@@ -699,6 +795,7 @@ export function EditorCanvas({
     if (panRef.current && !spaceRef.current) {
       panRef.current = null;
     }
+    imageDragRef.current = null;
     updateCursor();
     pendingClickRef.current = null;
   };
@@ -712,6 +809,7 @@ export function EditorCanvas({
       // A second finger touching down starts a pinch-zoom gesture — cancel any
       // pending single-touch action (drag/tap) so it doesn't also fire.
       dragRef.current = null;
+      imageDragRef.current = null;
       lastTapRef.current = null;
       const [t1, t2] = [e.touches[0], e.touches[1]];
       const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
@@ -730,6 +828,7 @@ export function EditorCanvas({
     const sy = t.clientY - rect.top;
 
     touchRef.current = { lastX: t.clientX, lastY: t.clientY, lastDist: 0 };
+    imageDragRef.current = null;
 
     // Double-tap detection — fire label editor open if two taps within 300ms/20px
     const now = Date.now();
@@ -845,12 +944,20 @@ export function EditorCanvas({
       return;
     }
 
+    if (es.mode === 'adjust-image') {
+      const moved = imageDragRef.current?.moved ?? false;
+      applyImageOffsetDelta(dx, dy, moved);
+      imageDragRef.current = { lastX: t.clientX, lastY: t.clientY, moved: true };
+      return;
+    }
+
     onPan(dx, dy);
   };
 
   const handleTouchEnd = () => {
     touchRef.current = null;
     dragRef.current = null;
+    imageDragRef.current = null;
     if (esRef.current.mode === 'edge' || esRef.current.mode === 'calibrate' || esRef.current.mode === 'node') {
       onEditorStateChange({ mousePos: null });
     }
@@ -1190,6 +1297,28 @@ export function EditorCanvas({
             </div>
           </div>
         </>
+      )}
+
+      {/* Adjust-image mode banner — no full-screen backdrop (unlike the other popups):
+          the whole point of this mode is dragging the canvas underneath to pan the image,
+          so the map must stay interactive while this banner is showing. */}
+      {editorState.mode === 'adjust-image' && (
+        <div
+          className={isSmall ? popupStyles.bottomSheet : popupStyles.popup}
+          style={isSmall ? undefined : { left: Math.min(canvasW / 2 - 130, canvasW - 260), top: 60 }}
+        >
+          <div className={popupStyles.popupRow}>
+            <label className={popupStyles.popupLabel}>Adjusting image — drag to pan</label>
+          </div>
+          <div className={popupStyles.popupActions}>
+            <button className={popupStyles.popupBtn} onClick={handleImageZoomOut} title="Zoom out">−</button>
+            <button className={popupStyles.popupBtn} onClick={handleImageZoomIn} title="Zoom in">+</button>
+            <button className={popupStyles.popupBtn} onClick={handleImageReset}>Reset</button>
+            <button className={clsx(popupStyles.popupBtn, popupStyles.popupBtnPrimary)} onClick={handleImageAdjustDone}>
+              Done
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

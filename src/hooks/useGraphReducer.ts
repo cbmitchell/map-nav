@@ -15,6 +15,7 @@ export type Action =
   | { type: 'ADD_SECTION'; payload: Section }
   | { type: 'UPDATE_SECTION'; payload: { id: string; name?: string; floor?: number; building?: string } }
   | { type: 'UPDATE_SECTION_IMAGE'; payload: { id: string; imageData: string; imageW: number; imageH: number } }
+  | { type: 'UPDATE_SECTION_IMAGE_TRANSFORM'; payload: { id: string; imageOffsetX: number; imageOffsetY: number; imageScale: number }; coalesce?: boolean }
   | { type: 'DELETE_SECTION'; payload: { id: string } }
   | { type: 'ADD_NODE'; payload: Node }
   | { type: 'UPDATE_NODE'; payload: Partial<Node> & { id: string }; canvasW?: number; canvasH?: number; coalesce?: boolean }
@@ -136,8 +137,27 @@ export function reducer(state: Building, action: Action): Building {
         ...state,
         sections: state.sections.map((s) =>
           s.id === action.payload.id
-            ? { ...s, imageData: action.payload.imageData, imageW: action.payload.imageW, imageH: action.payload.imageH }
+            ? {
+                ...s,
+                imageData: action.payload.imageData,
+                imageW: action.payload.imageW,
+                imageH: action.payload.imageH,
+                // A stale pan/zoom transform from the old image is meaningless for the new one.
+                imageOffsetX: undefined,
+                imageOffsetY: undefined,
+                imageScale: undefined,
+              }
             : s,
+        ),
+      };
+    }
+
+    case 'UPDATE_SECTION_IMAGE_TRANSFORM': {
+      const { id, imageOffsetX, imageOffsetY, imageScale } = action.payload;
+      return {
+        ...state,
+        sections: state.sections.map((s) =>
+          s.id === id ? { ...s, imageOffsetX, imageOffsetY, imageScale } : s,
         ),
       };
     }
@@ -434,10 +454,13 @@ export function useGraphReducer() {
   useLayoutEffect(() => { stateRef.current = state; });
 
   // Stable dispatch wrapper that snapshots state before each mutation.
-  // UPDATE_NODE dispatches with coalesce: true (continuation moves within a single node
-  // drag) skip the snapshot so the whole drag undoes as one step.
+  // UPDATE_NODE and UPDATE_SECTION_IMAGE_TRANSFORM dispatches with coalesce: true
+  // (continuation moves within a single drag) skip the snapshot so the whole drag
+  // undoes as one step.
   const dispatch = useCallback((action: Action) => {
-    const skipSnapshot = action.type === 'LOAD_BUILDING' || (action.type === 'UPDATE_NODE' && action.coalesce);
+    const skipSnapshot = action.type === 'LOAD_BUILDING'
+      || (action.type === 'UPDATE_NODE' && action.coalesce)
+      || (action.type === 'UPDATE_SECTION_IMAGE_TRANSFORM' && action.coalesce);
     if (!skipSnapshot) {
       undoStack.current = [stateRef.current, ...undoStack.current].slice(0, MAX_UNDO);
     }

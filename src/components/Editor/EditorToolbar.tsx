@@ -23,6 +23,7 @@ interface EditorToolbarProps {
   onZoomOut: () => void;
   onResetView: () => void;
   onSidebarToggle: () => void;
+  onSectionImageReplaced: (sectionId: string) => void;
 }
 
 export function EditorToolbar({
@@ -38,6 +39,7 @@ export function EditorToolbar({
   onZoomOut,
   onResetView,
   onSidebarToggle,
+  onSectionImageReplaced,
 }: EditorToolbarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -69,6 +71,7 @@ export function EditorToolbar({
   const dispatchImage = (imageData: string, imageW: number, imageH: number) => {
     if (!activeSectionId) return;
     dispatch({ type: 'UPDATE_SECTION_IMAGE', payload: { id: activeSectionId, imageData, imageW, imageH } });
+    onSectionImageReplaced(activeSectionId);
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -145,6 +148,19 @@ export function EditorToolbar({
             <span className={styles.btnIcon}>{icon}</span>
           </button>
         ))}
+        <button
+          title="Adjust Image"
+          disabled={!activeSection?.imageData}
+          className={clsx(
+            styles.btn,
+            editorState.mode === 'adjust-image' && styles.btnActive,
+            !activeSection?.imageData && styles.btnDisabled,
+          )}
+          onClick={() => setMode('adjust-image')}
+        >
+          <span className={styles.btnLabel}>Adjust Image</span>
+          <span className={styles.btnIcon}>⤢</span>
+        </button>
         {activeSection && (
           <span
             className={clsx(styles.calibratedBadge, activeSection.scale !== undefined && styles.calibratedBadgeActive)}
