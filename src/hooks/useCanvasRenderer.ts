@@ -5,7 +5,7 @@ import type { EditorState } from '../types/editor';
 import { DEFAULT_EDITOR_STATE } from '../types/editor';
 import type { ZoomPanState } from './useZoomPan';
 import { DEFAULT_ZOOM_PAN } from './useZoomPan';
-import { ROOM_ENTRANCE_EDGE_TYPE, findMarkerForEntrance } from '../utils/roomEntrances';
+import { ROOM_ENTRANCE_EDGE_TYPE, getImpersonatingMarker } from '../utils/roomEntrances';
 
 // ---------------------------------------------------------------------------
 // Edge display helpers (derived from building.edgeTypes at render time)
@@ -40,6 +40,8 @@ export function useCanvasRenderer(
   isNavigator = false,
   hiddenCategories: Set<string> = EMPTY_HIDDEN_SET,
   favorites: Set<string> = EMPTY_FAVORITES_SET,
+  originRoomId: string | null = null,
+  destinationRoomId: string | null = null,
 ) {
   const buildingRef = useRef(building);
   const activeSectionIdRef = useRef(activeSectionId);
@@ -50,6 +52,8 @@ export function useCanvasRenderer(
   const isNavigatorRef = useRef(isNavigator);
   const hiddenCategoriesRef = useRef(hiddenCategories);
   const favoritesRef = useRef(favorites);
+  const originRoomIdRef = useRef(originRoomId);
+  const destinationRoomIdRef = useRef(destinationRoomId);
   const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
   const redrawRef = useRef<() => void>(() => {});
 
@@ -63,6 +67,8 @@ export function useCanvasRenderer(
     isNavigatorRef.current = isNavigator;
     hiddenCategoriesRef.current = hiddenCategories;
     favoritesRef.current = favorites;
+    originRoomIdRef.current = originRoomId;
+    destinationRoomIdRef.current = destinationRoomId;
   });
 
   const redraw = useCallback(() => {
@@ -82,6 +88,8 @@ export function useCanvasRenderer(
     const isNavigator = isNavigatorRef.current;
     const hiddenCategories = hiddenCategoriesRef.current;
     const favorites = favoritesRef.current;
+    const originRoomId = originRoomIdRef.current;
+    const destinationRoomId = destinationRoomIdRef.current;
 
     // On mobile the canvas may be taller than the image aspect ratio (fills the screen).
     // Content coordinates are always bounded by the image's natural aspect ratio.
@@ -357,12 +365,19 @@ export function useCanvasRenderer(
     const entranceOverrides = new Map<string, typeof sectionNodes[number]>(); // entranceId -> marker
     const hiddenMarkerIds = new Set<string>();
     if (isNavigator && path && path.length > 0) {
-      for (const entranceId of [path[0], path[path.length - 1]]) {
-        const marker = findMarkerForEntrance(building.nodes, building.edges, entranceId);
-        if (marker) {
-          entranceOverrides.set(entranceId, marker);
-          hiddenMarkerIds.add(marker.id);
-        }
+      const originMarker = getImpersonatingMarker(building.nodes, originRoomId);
+      if (originMarker) {
+        entranceOverrides.set(path[0], originMarker);
+        hiddenMarkerIds.add(originMarker.id);
+      }
+      // If origin and destination resolve to the same single-node path (e.g. a route
+      // with literally one step), this overwrites the origin's entry — one canvas node
+      // can't impersonate two rooms at once, so the destination wins the tie. Same
+      // structural ceiling that existed before this fix, just no longer an arbitrary pick.
+      const destinationMarker = getImpersonatingMarker(building.nodes, destinationRoomId);
+      if (destinationMarker) {
+        entranceOverrides.set(path[path.length - 1], destinationMarker);
+        hiddenMarkerIds.add(destinationMarker.id);
       }
     }
 
@@ -499,7 +514,7 @@ export function useCanvasRenderer(
 
   useEffect(() => {
     redraw();
-  }, [redraw, building, activeSectionId, editorState, zoomPan, highlightPath, roomsOnly, isNavigator, hiddenCategories, favorites]);
+  }, [redraw, building, activeSectionId, editorState, zoomPan, highlightPath, roomsOnly, isNavigator, hiddenCategories, favorites, originRoomId, destinationRoomId]);
 
   return { redraw };
 }

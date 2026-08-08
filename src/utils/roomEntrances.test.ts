@@ -3,7 +3,7 @@ import {
   ROOM_ENTRANCE_EDGE_TYPE,
   getRoomEntranceIds,
   resolveRoomCandidates,
-  findMarkerForEntrance,
+  getImpersonatingMarker,
 } from './roomEntrances';
 import type { Node, Edge } from '../types/graph';
 
@@ -57,23 +57,22 @@ describe('resolveRoomCandidates', () => {
   });
 });
 
-describe('findMarkerForEntrance', () => {
-  it('finds the marker a node is an entrance of', () => {
+describe('getImpersonatingMarker', () => {
+  it('returns the marker node for a matching room id', () => {
     const nodes = [node('M', { isRoom: true, isRoomMarker: true, label: 'Board Room' }), node('A')];
-    const edges = [entranceEdge('e1', 'M', 'A')];
-    expect(findMarkerForEntrance(nodes, edges, 'A')?.id).toBe('M');
+    expect(getImpersonatingMarker(nodes, 'M')?.id).toBe('M');
   });
 
-  it('returns undefined for a node with no Room Entrance edge', () => {
-    const nodes = [node('A'), node('B')];
-    const edges = [walkway('e1', 'A', 'B')];
-    expect(findMarkerForEntrance(nodes, edges, 'A')).toBeUndefined();
+  it('returns undefined for a room id that is not a marker', () => {
+    const nodes = [node('A', { isRoom: true })];
+    expect(getImpersonatingMarker(nodes, 'A')).toBeUndefined();
   });
 
-  it('returns undefined if the connected node is not actually flagged a marker', () => {
-    // Defensive case: an edge of this type exists but the "marker" side lost its flag.
-    const nodes = [node('M', { isRoom: true, isRoomMarker: false }), node('A')];
-    const edges = [entranceEdge('e1', 'M', 'A')];
-    expect(findMarkerForEntrance(nodes, edges, 'A')).toBeUndefined();
+  it('returns undefined for null', () => {
+    expect(getImpersonatingMarker([], null)).toBeUndefined();
+  });
+
+  it('returns undefined for an unknown room id', () => {
+    expect(getImpersonatingMarker([], 'ghost')).toBeUndefined();
   });
 });

@@ -3,7 +3,7 @@ import clsx from 'clsx';
 import type { Building } from '../../types/graph';
 import styles from './Navigator.module.css';
 import { usePathfinder } from '../../hooks/usePathfinder';
-import { findMarkerForEntrance } from '../../utils/roomEntrances';
+import { getImpersonatingMarker } from '../../utils/roomEntrances';
 import { useZoomPan, DEFAULT_ZOOM_PAN } from '../../hooks/useZoomPan';
 import { getDefaultSection } from '../../utils/buildings';
 import type { ZoomPanState } from '../../hooks/useZoomPan';
@@ -56,7 +56,7 @@ export function Navigator({ state, hiddenCategories, onHiddenCategoriesChange, f
     setView(zoomPerSection.current[newId] ?? DEFAULT_ZOOM_PAN);
   }, [setView]);
 
-  const { path, error } = usePathfinder(state, srcId, tgtId, tgtCategory, excludedTypes);
+  const { path, error, originRoomId, destinationRoomId } = usePathfinder(state, srcId, tgtId, tgtCategory, excludedTypes);
 
   // A stale step index from a previous route must never leak into a new one.
   // usePathfinder memoizes path, so this only fires on a genuine recompute. Adjusting
@@ -99,14 +99,14 @@ export function Navigator({ state, hiddenCategories, onHiddenCategoriesChange, f
   // the marker's own label at Start/Arrive too, not the entrance's (usually blank) one.
   // A lone room (no marker) has no Room Entrance edge, so this naturally resolves to
   // null and falls back to the node's own real label.
-  const originLabel = useMemo(() => {
-    if (!path || path.length === 0) return null;
-    return findMarkerForEntrance(state.nodes, state.edges, path[0])?.label ?? null;
-  }, [path, state.nodes, state.edges]);
-  const destinationLabel = useMemo(() => {
-    if (!path || path.length === 0) return null;
-    return findMarkerForEntrance(state.nodes, state.edges, path[path.length - 1])?.label ?? null;
-  }, [path, state.nodes, state.edges]);
+  const originLabel = useMemo(
+    () => getImpersonatingMarker(state.nodes, originRoomId)?.label ?? null,
+    [state.nodes, originRoomId],
+  );
+  const destinationLabel = useMemo(
+    () => getImpersonatingMarker(state.nodes, destinationRoomId)?.label ?? null,
+    [state.nodes, destinationRoomId],
+  );
 
   // When routing by category, resolve the destination room name from the path's last node
   const resolvedTgtLabel = useMemo(() => {
@@ -217,6 +217,8 @@ export function Navigator({ state, hiddenCategories, onHiddenCategoriesChange, f
             activeSectionId={activeSectionId}
             path={path}
             currentStepNodeIds={currentStepNodeIds}
+            originRoomId={originRoomId}
+            destinationRoomId={destinationRoomId}
             zoomPan={zoomPan}
             onWheel={handleWheel}
             onPan={pan}

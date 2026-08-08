@@ -25,6 +25,8 @@ interface NavigatorCanvasProps {
   activeSectionId: string | null;
   path: string[] | null;
   currentStepNodeIds: string[] | null;
+  originRoomId: string | null;
+  destinationRoomId: string | null;
   zoomPan: ZoomPanState;
   onWheel: (e: WheelEvent, rect: DOMRect) => void;
   onPan: (dx: number, dy: number) => void;
@@ -42,6 +44,8 @@ export function NavigatorCanvas({
   activeSectionId,
   path,
   currentStepNodeIds,
+  originRoomId,
+  destinationRoomId,
   zoomPan,
   onWheel,
   onPan,
@@ -104,6 +108,8 @@ export function NavigatorCanvas({
     true,
     hiddenCategories,
     favorites,
+    originRoomId,
+    destinationRoomId,
   );
 
   // Canvas sizing

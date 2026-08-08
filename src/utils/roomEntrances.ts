@@ -23,16 +23,15 @@ export function resolveRoomCandidates(nodes: Node[], edges: Edge[], id: string):
 }
 
 /**
- * The marker (if any) that this node is currently standing in for as a resolved route
- * endpoint — used to override displayed label/styling in Navigator so the entrance
- * visually "becomes" the room it belongs to.
+ * The marker (if any) that this already-resolved routing endpoint stands in for — used
+ * to override displayed label/styling in Navigator so the entrance visually "becomes"
+ * the room it belongs to. Takes the room id usePathfinder already determined this path
+ * endpoint was resolved from (PathfinderResult.originRoomId/destinationRoomId), rather
+ * than re-deriving it from the entrance's own edges — that's ambiguous whenever a
+ * single entrance has Room Entrance edges to more than one marker.
  */
-export function findMarkerForEntrance(nodes: Node[], edges: Edge[], entranceId: string): Node | undefined {
-  const edge = edges.find(
-    (e) => e.type === ROOM_ENTRANCE_EDGE_TYPE && (e.srcId === entranceId || e.tgtId === entranceId),
-  );
-  if (!edge) return undefined;
-  const otherId = edge.srcId === entranceId ? edge.tgtId : edge.srcId;
-  const other = nodes.find((n) => n.id === otherId);
-  return other?.isRoomMarker ? other : undefined;
+export function getImpersonatingMarker(nodes: Node[], roomId: string | null): Node | undefined {
+  if (!roomId) return undefined;
+  const node = nodes.find((n) => n.id === roomId);
+  return node?.isRoomMarker ? node : undefined;
 }
