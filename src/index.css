@@ -49,6 +49,7 @@
 
 html, body, #root {
   height: 100%;
+  overflow: hidden;
   font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
   background: var(--bg-base);
   color: var(--text-primary);

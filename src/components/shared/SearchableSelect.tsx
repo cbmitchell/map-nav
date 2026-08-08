@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import clsx from 'clsx';
+import { useMobile } from '../../hooks/useMobile';
 import styles from './SearchableSelect.module.css';
 
 export interface SearchableSelectOption {
@@ -17,13 +19,24 @@ interface SearchableSelectProps {
   disabled?: boolean;
 }
 
+interface ListboxCoords {
+  top: number;
+  left: number;
+  width: number;
+  maxHeight: number;
+}
+
 export function SearchableSelect({ options, value, onChange, placeholder, disabled }: SearchableSelectProps) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
+  const [coords, setCoords] = useState<ListboxCoords | null>(null);
   const editingRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listboxRef = useRef<HTMLUListElement>(null);
+  const { isMobile, isTablet } = useMobile();
+  const usePortal = isMobile || isTablet;
 
   const selected = useMemo(() => options.find((o) => o.id === value) ?? null, [options, value]);
 
@@ -33,11 +46,15 @@ export function SearchableSelect({ options, value, onChange, placeholder, disabl
     if (!editingRef.current) setQuery(selected?.label ?? '');
   }, [selected]);
 
-  // Close on click outside the whole component
+  // Close on click outside the whole component (including the portaled listbox,
+  // which sits outside containerRef's subtree on mobile)
   useEffect(() => {
     if (!open) return;
     const onDocMouseDown = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as globalThis.Node)) {
+      const target = e.target as globalThis.Node;
+      const inContainer = containerRef.current?.contains(target) ?? false;
+      const inListbox = listboxRef.current?.contains(target) ?? false;
+      if (!inContainer && !inListbox) {
         setOpen(false);
         editingRef.current = false;
         setQuery(selected?.label ?? '');
@@ -46,6 +63,34 @@ export function SearchableSelect({ options, value, onChange, placeholder, disabl
     document.addEventListener('mousedown', onDocMouseDown);
     return () => document.removeEventListener('mousedown', onDocMouseDown);
   }, [open, selected]);
+
+  // While open on mobile/tablet, track the input's on-screen position so the
+  // portaled listbox can be anchored under it with position: fixed, escaping
+  // NavigatorControls' scrolling/clipped .tabContent ancestor.
+  useLayoutEffect(() => {
+    if (!open || !usePortal) return;
+    const recompute = () => {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setCoords({
+        top: rect.bottom + 4,
+        left: rect.left,
+        width: rect.width,
+        maxHeight: Math.max(120, window.innerHeight - rect.bottom - 8),
+      });
+    };
+    recompute();
+    window.addEventListener('resize', recompute);
+    window.addEventListener('scroll', recompute, true);
+    window.addEventListener('orientationchange', recompute);
+    window.visualViewport?.addEventListener('resize', recompute);
+    return () => {
+      window.removeEventListener('resize', recompute);
+      window.removeEventListener('scroll', recompute, true);
+      window.removeEventListener('orientationchange', recompute);
+      window.visualViewport?.removeEventListener('resize', recompute);
+    };
+  }, [open, usePortal]);
 
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -81,7 +126,7 @@ export function SearchableSelect({ options, value, onChange, placeholder, disabl
   // Keep the highlighted option in view during keyboard navigation
   useEffect(() => {
     if (!open) return;
-    const el = containerRef.current?.querySelector<HTMLElement>(`[data-idx="${highlight}"]`);
+    const el = listboxRef.current?.querySelector<HTMLElement>(`[data-idx="${highlight}"]`);
     el?.scrollIntoView({ block: 'nearest' });
   }, [highlight, open]);
 
@@ -142,6 +187,57 @@ export function SearchableSelect({ options, value, onChange, placeholder, disabl
     inputRef.current?.focus();
   };
 
+  const listboxBody = flatFiltered.length === 0 ? (
+    <li className={styles.emptyMessage}>No matches</li>
+  ) : (
+    groups.map(([groupLabel, opts]) => (
+      <li key={groupLabel} className={styles.group}>
+        <div className={styles.groupLabel}>{groupLabel}</div>
+        <ul className={styles.groupList}>
+          {opts.map((opt) => {
+            const flatIndex = flatFiltered.indexOf(opt);
+            const hint = aliasHints.get(opt.id);
+            return (
+              <li
+                key={opt.id}
+                data-idx={flatIndex}
+                role="option"
+                aria-selected={opt.id === value}
+                className={clsx(styles.option, flatIndex === highlight && styles.optionHighlighted)}
+                onMouseEnter={() => setHighlight(flatIndex)}
+                // eslint-disable-next-line react-hooks/refs -- commitSelection's ref write runs from this event handler, never during render
+                onMouseDown={(e) => { e.preventDefault(); commitSelection(opt); }}
+              >
+                <div className={styles.optionLabel}>{opt.label}</div>
+                {hint && <div className={styles.optionHint}>matched: {hint}</div>}
+              </li>
+            );
+          })}
+        </ul>
+      </li>
+    ))
+  );
+
+  const listbox = open && !disabled && (
+    usePortal ? (
+      createPortal(
+        <ul
+          ref={listboxRef}
+          className={clsx(styles.listbox, styles.listboxPortal)}
+          style={coords ? { top: coords.top, left: coords.left, width: coords.width, maxHeight: coords.maxHeight } : undefined}
+          role="listbox"
+        >
+          {listboxBody}
+        </ul>,
+        document.body,
+      )
+    ) : (
+      <ul ref={listboxRef} className={styles.listbox} role="listbox">
+        {listboxBody}
+      </ul>
+    )
+  );
+
   return (
     <div className={styles.container} ref={containerRef}>
       <div className={styles.inputRow}>
@@ -164,40 +260,7 @@ export function SearchableSelect({ options, value, onChange, placeholder, disabl
           <button type="button" className={styles.clearBtn} onMouseDown={handleClear} title="Clear">×</button>
         )}
       </div>
-      {open && !disabled && (
-        <ul className={styles.listbox} role="listbox">
-          {flatFiltered.length === 0 ? (
-            <li className={styles.emptyMessage}>No matches</li>
-          ) : (
-            groups.map(([groupLabel, opts]) => (
-              <li key={groupLabel} className={styles.group}>
-                <div className={styles.groupLabel}>{groupLabel}</div>
-                <ul className={styles.groupList}>
-                  {opts.map((opt) => {
-                    const flatIndex = flatFiltered.indexOf(opt);
-                    const hint = aliasHints.get(opt.id);
-                    return (
-                      <li
-                        key={opt.id}
-                        data-idx={flatIndex}
-                        role="option"
-                        aria-selected={opt.id === value}
-                        className={clsx(styles.option, flatIndex === highlight && styles.optionHighlighted)}
-                        onMouseEnter={() => setHighlight(flatIndex)}
-                        // eslint-disable-next-line react-hooks/refs -- commitSelection's ref write runs from this event handler, never during render
-                        onMouseDown={(e) => { e.preventDefault(); commitSelection(opt); }}
-                      >
-                        <div className={styles.optionLabel}>{opt.label}</div>
-                        {hint && <div className={styles.optionHint}>matched: {hint}</div>}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </li>
-            ))
-          )}
-        </ul>
-      )}
+      {listbox}
     </div>
   );
 }

@@ -119,6 +119,11 @@
   list-style: none;
 }
 
+.listboxPortal {
+  position: fixed;
+  z-index: 400;
+}
+
 @media (max-width: 1024px) {
   .input {
     font-size: 16px;
@@ -134,9 +139,5 @@
 
   .optionHint {
     font-size: 12px;
-  }
-
-  .listbox {
-    max-height: none;
   }
 }
