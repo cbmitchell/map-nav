@@ -34,7 +34,7 @@ import all pages as separate sections automatically. Imported pages are named
 
 **To rename a section:** Click the **✎** icon next to its name in the sidebar and press Enter to save.
 
-**To replace a section's map image:** Select the section, then click **Replace Image** in the toolbar.
+**To replace a section's map image:** Click the **✎** icon next to its name in the sidebar and choose a new file in the edit form.
 
 ### Placing nodes
 
@@ -153,8 +153,8 @@ Press `Ctrl+Z` (Windows/Linux) or `Cmd+Z` (Mac) to undo the last action. Up to 1
 
 ### Export and Import
 
-- **Export JSON** — downloads your entire building (map images, nodes, edges) as a single `.json` file
-- **Import JSON** — loads a previously exported file, replacing the current data (you'll be asked to confirm)
+- **Export** — downloads your entire building (map images, nodes, edges) as a single `.json` file
+- **Import** — loads a previously exported file, replacing the current data (you'll be asked to confirm)
 
 ---
 

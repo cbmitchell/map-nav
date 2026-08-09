@@ -161,10 +161,9 @@ export function Editor({ state, dispatch, undo, storageError, imageStorageError 
   // swapped, since the new image likely no longer lines up with existing annotations.
   const handleSectionImageReplaced = useCallback(
     (sectionId: string) => {
-      // Only actually switch sections if needed — EditorToolbar's swap always targets
-      // the already-active section, and switching unconditionally would needlessly
-      // reset that section's remembered zoom/pan (only EditorSidebar's edit form can
-      // target a section that isn't currently active).
+      // Only actually switch sections if needed — replacing an image via EditorSidebar's
+      // edit form can target a section that isn't currently active, and switching
+      // unconditionally would needlessly reset that section's remembered zoom/pan.
       if (sectionId !== activeSectionId) {
         handleSectionChange(sectionId);
       }
@@ -237,7 +236,6 @@ export function Editor({ state, dispatch, undo, storageError, imageStorageError 
       )}
       <EditorToolbar
         building={state}
-        activeSectionId={activeSectionId}
         activeSection={activeSection}
         editorState={editorState}
         onEditorStateChange={handleEditorStateChange}
@@ -248,7 +246,6 @@ export function Editor({ state, dispatch, undo, storageError, imageStorageError 
         onZoomOut={handleZoomOut}
         onResetView={handleResetView}
         onSidebarToggle={() => setSidebarOpen((p) => !p)}
-        onSectionImageReplaced={handleSectionImageReplaced}
       />
       <div className={styles.body}>
         <EditorSidebar

@@ -1,7 +1,6 @@
 import { useRef } from 'react';
 import type { ReactNode } from 'react';
 import clsx from 'clsx';
-import { loadPdf, renderPdfPage } from '../../utils/pdf';
 import type { Dispatch } from 'react';
 import type { Building, Section } from '../../types/graph';
 import type { EditorState, EditorMode } from '../../types/editor';
@@ -12,7 +11,6 @@ import styles from './EditorToolbar.module.css';
 
 interface EditorToolbarProps {
   building: Building;
-  activeSectionId: string | null;
   activeSection: Section | undefined;
   editorState: EditorState;
   onEditorStateChange: (update: Partial<EditorState>) => void;
@@ -23,12 +21,10 @@ interface EditorToolbarProps {
   onZoomOut: () => void;
   onResetView: () => void;
   onSidebarToggle: () => void;
-  onSectionImageReplaced: (sectionId: string) => void;
 }
 
 export function EditorToolbar({
   building,
-  activeSectionId,
   activeSection,
   editorState,
   onEditorStateChange,
@@ -39,9 +35,7 @@ export function EditorToolbar({
   onZoomOut,
   onResetView,
   onSidebarToggle,
-  onSectionImageReplaced,
 }: EditorToolbarProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const { isMobile, isTablet } = useMobile();
   const isMobileOrTablet = isMobile || isTablet;
@@ -64,36 +58,6 @@ export function EditorToolbar({
         ? { autoConnectEnabled: true }
         : { autoConnectEnabled: false, snapToAxis: false, lastPathNodeId: null },
     );
-  };
-
-  const handleUploadClick = () => fileInputRef.current?.click();
-
-  const dispatchImage = (imageData: string, imageW: number, imageH: number) => {
-    if (!activeSectionId) return;
-    dispatch({ type: 'UPDATE_SECTION_IMAGE', payload: { id: activeSectionId, imageData, imageW, imageH } });
-    onSectionImageReplaced(activeSectionId);
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = '';
-
-    if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-      const doc = await loadPdf(file);
-      const { imageData, imageW, imageH } = await renderPdfPage(doc, 1);
-      dispatchImage(imageData, imageW, imageH);
-    } else {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const imageData = ev.target?.result as string;
-        const img = new Image();
-        img.onload = () => dispatchImage(imageData, img.naturalWidth, img.naturalHeight);
-        img.onerror = () => alert('Failed to load image. The file may be corrupt or unsupported.');
-        img.src = imageData;
-      };
-      reader.readAsDataURL(file);
-    }
   };
 
   const handleImportClick = () => importInputRef.current?.click();
@@ -198,26 +162,19 @@ export function EditorToolbar({
 
       {/* Action buttons */}
       <div className={styles.group}>
-        <button
-          title="Delete selected"
-          className={clsx(styles.btn, hasSelection ? styles.btnDanger : styles.btnDisabled)}
-          disabled={!hasSelection}
-          onClick={onDelete}
-        >
-          <span className={styles.btnLabel}>Delete</span>
-          <span className={styles.btnIcon}>✕</span>
-        </button>
-        <button
-          title="Replace image"
-          className={clsx(styles.btn, !activeSectionId && styles.btnDisabled)}
-          disabled={!activeSectionId}
-          onClick={handleUploadClick}
-        >
-          <span className={styles.btnLabel}>Replace Image</span>
-          <span className={styles.btnIcon}>⬚</span>
-        </button>
-        <button title="Import JSON" className={styles.btn} onClick={handleImportClick}>
-          <span className={styles.btnLabel}>Import JSON</span>
+        {isMobileOrTablet && (
+          <button
+            title="Delete selected"
+            className={clsx(styles.btn, hasSelection ? styles.btnDanger : styles.btnDisabled)}
+            disabled={!hasSelection}
+            onClick={onDelete}
+          >
+            <span className={styles.btnLabel}>Delete</span>
+            <span className={styles.btnIcon}>✕</span>
+          </button>
+        )}
+        <button title="Import" className={styles.btn} onClick={handleImportClick}>
+          <span className={styles.btnLabel}>Import</span>
           <span className={styles.btnIcon}>
             {/* Arrow pointing down into a tray */}
             <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden>
@@ -228,12 +185,12 @@ export function EditorToolbar({
           </span>
         </button>
         <button
-          title="Export JSON"
+          title="Export"
           className={clsx(styles.btn, building.sections.length === 0 && styles.btnDisabled)}
           disabled={building.sections.length === 0}
           onClick={() => exportBuilding(building)}
         >
-          <span className={styles.btnLabel}>Export JSON</span>
+          <span className={styles.btnLabel}>Export</span>
           <span className={styles.btnIcon}>
             {/* Arrow pointing up out of a tray */}
             <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden>
@@ -275,13 +232,6 @@ export function EditorToolbar({
         </div>
       )}
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*,application/pdf"
-        style={{ display: 'none' }}
-        onChange={handleFileChange}
-      />
       <input
         ref={importInputRef}
         type="file"
