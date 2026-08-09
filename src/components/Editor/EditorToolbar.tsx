@@ -100,7 +100,6 @@ export function EditorToolbar({
           )],
           ['node', 'Add Node', '⊕'],
           ['edge', 'Add Edge', '↔'],
-          ['calibrate', 'Calibrate', '⌖'],
         ] as [EditorMode, string, ReactNode][]).map(([m, label, icon]) => (
           <button
             key={m}
@@ -112,6 +111,41 @@ export function EditorToolbar({
             <span className={styles.btnIcon}>{icon}</span>
           </button>
         ))}
+        <button
+          title={
+            activeSection
+              ? activeSection.scale !== undefined
+                ? `Calibrate (calibrated — ${activeSection.scale.toExponential(2)} units/px)`
+                : 'Calibrate (not calibrated)'
+              : 'Calibrate'
+          }
+          className={clsx(styles.btn, editorState.mode === 'calibrate' && styles.btnActive)}
+          onClick={() => setMode('calibrate')}
+        >
+          <span className={styles.btnLabel}>Calibrate</span>
+          <span className={styles.btnIcon}>⌖</span>
+          {activeSection && (
+            <span className={styles.calibrateStatusIcon}>
+              {activeSection.scale !== undefined ? (
+                <svg
+                  width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#1D9E75"
+                  strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden
+                >
+                  <path d="M2.5 7.5 L5.5 10.5 L11.5 3" />
+                </svg>
+              ) : (
+                <svg
+                  width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--accent-red)"
+                  strokeWidth="1.3" strokeLinejoin="round" aria-hidden
+                >
+                  <path d="M7 1.5 L13 12.5 L1 12.5 Z" />
+                  <line x1="7" y1="5" x2="7" y2="8.5" strokeLinecap="round" />
+                  <circle cx="7" cy="10.5" r="0.75" fill="var(--accent-red)" stroke="none" />
+                </svg>
+              )}
+            </span>
+          )}
+        </button>
         <button
           title="Adjust Image"
           disabled={!activeSection?.imageData}
@@ -125,14 +159,6 @@ export function EditorToolbar({
           <span className={styles.btnLabel}>Adjust Image</span>
           <span className={styles.btnIcon}>⤢</span>
         </button>
-        {activeSection && (
-          <span
-            className={clsx(styles.calibratedBadge, activeSection.scale !== undefined && styles.calibratedBadgeActive)}
-            title={activeSection.scale !== undefined ? `Scale: ${activeSection.scale.toExponential(2)} units/px` : 'Section not calibrated'}
-          >
-            {activeSection.scale !== undefined ? '✓ calibrated' : 'uncalibrated'}
-          </span>
-        )}
       </div>
 
       {/* Node-path toggles — desktop only */}

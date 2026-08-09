@@ -70,6 +70,16 @@
   display: none;
 }
 
+.calibrateStatusIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  margin-left: 5px;
+}
+
 .zoomLabel {
   font-size: 12px;
   color: var(--text-dim);
@@ -85,20 +95,6 @@
   max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.calibratedBadge {
-  font-size: 11px;
-  color: var(--text-faint);
-  padding: 2px 6px;
-  border-radius: 3px;
-  border: 1px solid var(--border-default);
-  white-space: nowrap;
-}
-
-.calibratedBadgeActive {
-  color: #1D9E75;
-  border-color: #1D9E75;
 }
 
 .toggleLabel {
@@ -192,9 +188,5 @@
   .linkBanner {
     margin-left: 0;
     width: 100%;
-  }
-
-  .calibratedBadge {
-    display: none;
   }
 }
