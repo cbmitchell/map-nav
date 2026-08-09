@@ -998,16 +998,18 @@ export function EditorCanvas({
     }
     const roomIds = new Set(buildingRef.current.nodes.filter((n) => n.isRoom).map((n) => n.id));
     const touching = buildingRef.current.edges.filter((e) => e.srcId === nodeId || e.tgtId === nodeId);
-    const toConvert = touching.filter((e) => !roomIds.has(e.srcId === nodeId ? e.tgtId : e.srcId)).length;
-    const toDelete = touching.length - toConvert;
-    const parts: string[] = [];
-    if (toConvert > 0) parts.push(`convert ${toConvert} edge${toConvert === 1 ? '' : 's'} to room entrances`);
-    if (toDelete > 0) parts.push(`delete ${toDelete} edge${toDelete === 1 ? '' : 's'} to other rooms`);
-    const detail = parts.length ? ` This will ${parts.join(' and ')}.` : '';
-    const confirmed = window.confirm(
-      `Make this node a room marker?${detail} It will be removed from the pathfinding graph, and its label/category will be used for whichever entrance is selected when routing to this room.`,
-    );
-    if (!confirmed) return;
+    if (touching.length > 0) {
+      const toConvert = touching.filter((e) => !roomIds.has(e.srcId === nodeId ? e.tgtId : e.srcId)).length;
+      const toDelete = touching.length - toConvert;
+      const parts: string[] = [];
+      if (toConvert > 0) parts.push(`convert ${toConvert} edge${toConvert === 1 ? '' : 's'} to room entrances`);
+      if (toDelete > 0) parts.push(`delete ${toDelete} edge${toDelete === 1 ? '' : 's'} to other rooms`);
+      const detail = parts.length ? ` This will ${parts.join(' and ')}.` : '';
+      const confirmed = window.confirm(
+        `Make this node a room marker?${detail} It will be removed from the pathfinding graph, and its label/category will be used for whichever entrance is selected when routing to this room.`,
+      );
+      if (!confirmed) return;
+    }
     dispatch({ type: 'SET_ROOM_MARKER', payload: { nodeId } });
     setLabelEditor({ ...labelEditor, isRoomMarker: true });
   };
