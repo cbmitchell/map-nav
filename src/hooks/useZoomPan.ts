@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 
 const MIN_SCALE = 0.25;
-const MAX_SCALE = 8;
+const DEFAULT_MAX_SCALE = 8;
 const ZOOM_STEP = 0.25;
 const WHEEL_SENSITIVITY = 0.001;
 
@@ -13,8 +13,8 @@ export interface ZoomPanState {
 
 export const DEFAULT_ZOOM_PAN: ZoomPanState = { scale: 1, panX: 0, panY: 0 };
 
-function clampScale(s: number) {
-  return Math.min(MAX_SCALE, Math.max(MIN_SCALE, s));
+function clampScale(s: number, maxScale: number = DEFAULT_MAX_SCALE) {
+  return Math.min(maxScale, Math.max(MIN_SCALE, s));
 }
 
 // Convert a point in screen (canvas-element) coords to canvas-content coords
@@ -48,24 +48,25 @@ export function fitZoomPan(
   };
 }
 
-export function useZoomPan() {
+export function useZoomPan(maxScale: number = DEFAULT_MAX_SCALE) {
   const [zoomPan, setZoomPan] = useState<ZoomPanState>(DEFAULT_ZOOM_PAN);
 
   // Zoom centered on a point in screen coords
   const zoomAt = useCallback((screenX: number, screenY: number, newScale: number) => {
     setZoomPan((prev) => {
-      const clamped = clampScale(newScale);
+      const clamped = clampScale(newScale, maxScale);
       // Keep the point under the cursor fixed
       const panX = screenX - (screenX - prev.panX) * (clamped / prev.scale);
       const panY = screenY - (screenY - prev.panY) * (clamped / prev.scale);
       return { scale: clamped, panX, panY };
     });
-  }, []);
+  }, [maxScale]);
 
   const zoomIn = useCallback((centerX?: number, centerY?: number) => {
     setZoomPan((prev) => {
       const newScale = clampScale(
         Math.round((prev.scale + ZOOM_STEP) / ZOOM_STEP) * ZOOM_STEP,
+        maxScale,
       );
       const cx = centerX ?? 0;
       const cy = centerY ?? 0;
@@ -73,12 +74,13 @@ export function useZoomPan() {
       const panY = cy - (cy - prev.panY) * (newScale / prev.scale);
       return { scale: newScale, panX, panY };
     });
-  }, []);
+  }, [maxScale]);
 
   const zoomOut = useCallback((centerX?: number, centerY?: number) => {
     setZoomPan((prev) => {
       const newScale = clampScale(
         Math.floor((prev.scale - ZOOM_STEP / 2) / ZOOM_STEP) * ZOOM_STEP,
+        maxScale,
       );
       const cx = centerX ?? 0;
       const cy = centerY ?? 0;
@@ -86,7 +88,7 @@ export function useZoomPan() {
       const panY = cy - (cy - prev.panY) * (newScale / prev.scale);
       return { scale: newScale, panX, panY };
     });
-  }, []);
+  }, [maxScale]);
 
   const resetView = useCallback(() => {
     setZoomPan(DEFAULT_ZOOM_PAN);
@@ -99,13 +101,13 @@ export function useZoomPan() {
       const screenY = e.clientY - canvasRect.top;
       setZoomPan((prev) => {
         const delta = -e.deltaY * WHEEL_SENSITIVITY * prev.scale;
-        const newScale = clampScale(prev.scale + delta);
+        const newScale = clampScale(prev.scale + delta, maxScale);
         const panX = screenX - (screenX - prev.panX) * (newScale / prev.scale);
         const panY = screenY - (screenY - prev.panY) * (newScale / prev.scale);
         return { scale: newScale, panX, panY };
       });
     },
-    [],
+    [maxScale],
   );
 
   // Returns a mousemove handler delta to apply panning; call with raw movement
