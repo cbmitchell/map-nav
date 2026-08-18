@@ -67,6 +67,15 @@ function migrateBuilding(b: Building): Building {
   let result = b;
   if (!result.edgeTypes || result.edgeTypes.length === 0) {
     result = { ...result, edgeTypes: DEFAULT_EDGE_TYPES };
+  } else {
+    // Backfill any built-in types missing from buildings saved/exported before that
+    // type existed (e.g. room-entrance) — without touching already-present types,
+    // which may carry user edits to weight/accessibility.
+    const existingIds = new Set(result.edgeTypes.map((t) => t.id));
+    const missingBuiltIns = DEFAULT_EDGE_TYPES.filter((t) => !existingIds.has(t.id));
+    if (missingBuiltIns.length > 0) {
+      result = { ...result, edgeTypes: [...result.edgeTypes, ...missingBuiltIns] };
+    }
   }
   if (!result.name) {
     result = { ...result, name: DEFAULT_BUILDING_NAME };
