@@ -1059,6 +1059,8 @@ export function EditorCanvas({
 
   const handleEdgeTypeChange = (typeId: string) => {
     if (!edgeEditor) return;
+    const currentEdge = building.edges.find((e) => e.id === edgeEditor.edgeId);
+    if (currentEdge?.type === ROOM_ENTRANCE_EDGE_TYPE) return;
     dispatch({ type: 'UPDATE_EDGE', payload: { id: edgeEditor.edgeId, type: typeId } });
     setEdgeEditor(null);
     onEditorStateChange({ selectedEdgeId: null });
@@ -1244,26 +1246,30 @@ export function EditorCanvas({
             }}
           >
             {isSmall && <div className={popupStyles.dragHandle} />}
-            <div className={popupStyles.edgeTypeBtnRow}>
-              {building.edgeTypes.filter((t) => t.id !== ROOM_ENTRANCE_EDGE_TYPE).map((typeDef) => {
-                const currentEdge = building.edges.find((e) => e.id === edgeEditor.edgeId);
-                const isActive = currentEdge?.type === typeDef.id;
-                return (
-                  <button
-                    key={typeDef.id}
-                    className={popupStyles.edgeTypeBtn}
-                    style={{
-                      borderColor: typeDef.color,
-                      color: isActive ? '#fff' : typeDef.color,
-                      background: isActive ? typeDef.color : 'transparent',
-                    }}
-                    onClick={() => handleEdgeTypeChange(typeDef.id)}
-                  >
-                    {typeDef.name}
-                  </button>
-                );
-              })}
-            </div>
+            {building.edges.find((e) => e.id === edgeEditor.edgeId)?.type === ROOM_ENTRANCE_EDGE_TYPE ? (
+              <div className={popupStyles.popupHint}>Room entrance edge — type can't be changed</div>
+            ) : (
+              <div className={popupStyles.edgeTypeBtnRow}>
+                {building.edgeTypes.filter((t) => t.id !== ROOM_ENTRANCE_EDGE_TYPE).map((typeDef) => {
+                  const currentEdge = building.edges.find((e) => e.id === edgeEditor.edgeId);
+                  const isActive = currentEdge?.type === typeDef.id;
+                  return (
+                    <button
+                      key={typeDef.id}
+                      className={popupStyles.edgeTypeBtn}
+                      style={{
+                        borderColor: typeDef.color,
+                        color: isActive ? '#fff' : typeDef.color,
+                        background: isActive ? typeDef.color : 'transparent',
+                      }}
+                      onClick={() => handleEdgeTypeChange(typeDef.id)}
+                    >
+                      {typeDef.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <div className={popupStyles.popupActions}>
               <button className={clsx(popupStyles.popupBtn, popupStyles.popupBtnDanger)} onClick={handleDeleteEdge}>
                 Delete Edge
