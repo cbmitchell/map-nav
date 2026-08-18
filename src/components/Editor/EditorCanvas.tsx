@@ -812,7 +812,7 @@ export function EditorCanvas({
   // Touch events (reuse same hit-test and dispatch logic as mouse handlers)
   // ---------------------------------------------------------------------------
 
-  const handleTouchStart = (e: React.TouchEvent) => {
+  const handleTouchStart = (e: TouchEvent) => {
     if (e.touches.length === 2) {
       // A second finger touching down starts a pinch-zoom gesture — cancel any
       // pending single-touch action (drag/tap) so it doesn't also fire.
@@ -844,15 +844,24 @@ export function EditorCanvas({
       return;
     }
 
-    // Double-tap detection — fire label editor open if two taps within 300ms/20px
-    const now = Date.now();
-    const last = lastTapRef.current;
-    if (last && now - last.time < 300 && Math.hypot(sx - last.x, sy - last.y) < 20) {
+    // Double-tap detection — fire label editor open if two taps within 300ms/20px.
+    // Only tracked in select mode, where double-tap has a meaning (open the label
+    // editor); every other mode (edge, node, link, calibrate) treats each tap as its
+    // own independent input, so two quick taps on a node — e.g. the edge tool's first
+    // tap landing close in time to a prior stray tap — never gets silently swallowed
+    // as "the second half of a double-tap" instead of registering.
+    if (esRef.current.mode === 'select') {
+      const now = Date.now();
+      const last = lastTapRef.current;
+      if (last && now - last.time < 300 && Math.hypot(sx - last.x, sy - last.y) < 20) {
+        lastTapRef.current = null;
+        tryOpenLabelEditorAt(sx, sy);
+        return;
+      }
+      lastTapRef.current = { time: now, x: sx, y: sy };
+    } else {
       lastTapRef.current = null;
-      if (esRef.current.mode === 'select') tryOpenLabelEditorAt(sx, sy);
-      return;
     }
-    lastTapRef.current = { time: now, x: sx, y: sy };
 
     // Synthesize a mouse-down equivalent using screen coords
     const { x, y } = screenToCanvas(sx, sy, zoomPanRef.current);
@@ -900,6 +909,27 @@ export function EditorCanvas({
 
     handleCalibrateTap(x, y);
   };
+
+  // Bound as a native, non-passive listener (rather than the React onTouchStart prop)
+  // purely so preventDefault() actually takes effect. Without it, a tap that doesn't
+  // move before lifting still ran the handler above and set state correctly (e.g. the
+  // edge tool's pending source node) — but the browser then synthesizes a compatibility
+  // mousedown/mouseup/click sequence shortly after touchend, which re-enters
+  // handleMouseDown at the same coordinates and immediately undoes it (hitting the same
+  // node toggles the pending source back off). A touch that moves before lifting is
+  // exempt from that synthetic sequence, which is why dragging worked around the bug
+  // while a plain tap didn't. Calling preventDefault() in touchstart suppresses the
+  // synthetic sequence for the rest of the gesture, per the touch events spec.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const onNativeTouchStart = (e: TouchEvent) => {
+      e.preventDefault();
+      handleTouchStart(e);
+    };
+    canvas.addEventListener('touchstart', onNativeTouchStart, { passive: false });
+    return () => canvas.removeEventListener('touchstart', onNativeTouchStart);
+  });
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (!touchRef.current) return;
@@ -1116,7 +1146,6 @@ export function EditorCanvas({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onDoubleClick={handleDblClick}
-        onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onContextMenu={(e) => e.preventDefault()}
