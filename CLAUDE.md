@@ -444,6 +444,15 @@ Deleting a custom type reassigns all its edges to `walkway`.
   new id synchronously (e.g. to immediately wire up a connecting edge).
 - Numbers displayed to the user are always rounded — no raw floats in the UI.
 
+## Verifying changes
+
+This project has no browser-automation tooling set up (no Playwright/chromium-cli config,
+no component-testing library). For UI/frontend changes, do not attempt live-browser
+verification (launching a browser, driving the dev server, screenshotting) — don't install
+Playwright or similar packages for this purpose, even temporarily/unsaved. Verify with
+`npm run build`, `npm run lint`, and `npm run test` instead, and say explicitly that the UI
+itself hasn't been visually/interactively verified so the user knows to check it themselves.
+
 ---
 
 ## Known limitations and future work

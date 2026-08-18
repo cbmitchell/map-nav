@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import clsx from 'clsx';
 import { useMobile } from '../../hooks/useMobile';
+import { lockBodyScroll, unlockBodyScroll } from '../../utils/scrollLock';
 import styles from './SearchableSelect.module.css';
 
 export interface SearchableSelectOption {
@@ -19,18 +20,10 @@ interface SearchableSelectProps {
   disabled?: boolean;
 }
 
-interface ListboxCoords {
-  top: number;
-  left: number;
-  width: number;
-  maxHeight: number;
-}
-
 export function SearchableSelect({ options, value, onChange, placeholder, disabled }: SearchableSelectProps) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
-  const [coords, setCoords] = useState<ListboxCoords | null>(null);
   const editingRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -48,8 +41,10 @@ export function SearchableSelect({ options, value, onChange, placeholder, disabl
 
   // Close on click outside the whole component (including the portaled listbox,
   // which sits outside containerRef's subtree on mobile)
+  // Desktop only — on mobile/tablet the dropdown is a full-screen overlay with its own
+  // explicit Cancel button, so there's no "outside" to detect a click against.
   useEffect(() => {
-    if (!open) return;
+    if (!open || usePortal) return;
     const onDocMouseDown = (e: MouseEvent) => {
       const target = e.target as globalThis.Node;
       const inContainer = containerRef.current?.contains(target) ?? false;
@@ -62,34 +57,16 @@ export function SearchableSelect({ options, value, onChange, placeholder, disabl
     };
     document.addEventListener('mousedown', onDocMouseDown);
     return () => document.removeEventListener('mousedown', onDocMouseDown);
-  }, [open, selected]);
+  }, [open, selected, usePortal]);
 
-  // While open on mobile/tablet, track the input's on-screen position so the
-  // portaled listbox can be anchored under it with position: fixed, escaping
-  // NavigatorControls' scrolling/clipped .tabContent ancestor.
-  useLayoutEffect(() => {
+  // While open on mobile/tablet, lock body scroll as a defensive measure against iOS Safari's
+  // native "scroll the focused input into view above the keyboard" behavior, which can ignore
+  // overflow: hidden. The full-screen overlay below is the primary fix (its own input is
+  // already fixed-position and fully visible, so there's nothing for iOS to need to reveal).
+  useEffect(() => {
     if (!open || !usePortal) return;
-    const recompute = () => {
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      setCoords({
-        top: rect.bottom + 4,
-        left: rect.left,
-        width: rect.width,
-        maxHeight: Math.max(120, window.innerHeight - rect.bottom - 8),
-      });
-    };
-    recompute();
-    window.addEventListener('resize', recompute);
-    window.addEventListener('scroll', recompute, true);
-    window.addEventListener('orientationchange', recompute);
-    window.visualViewport?.addEventListener('resize', recompute);
-    return () => {
-      window.removeEventListener('resize', recompute);
-      window.removeEventListener('scroll', recompute, true);
-      window.removeEventListener('orientationchange', recompute);
-      window.visualViewport?.removeEventListener('resize', recompute);
-    };
+    lockBodyScroll();
+    return () => unlockBodyScroll();
   }, [open, usePortal]);
 
   const groups = useMemo(() => {
@@ -144,6 +121,23 @@ export function SearchableSelect({ options, value, onChange, placeholder, disabl
     setHighlight(0);
   };
 
+  // Mobile/tablet trigger is read-only (opens the full-screen overlay instead of taking the
+  // keyboard itself) — blur it immediately so the overlay's own input is unambiguously the one
+  // that's focused.
+  const handleTriggerFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    e.target.blur();
+    editingRef.current = true;
+    setOpen(true);
+    setQuery('');
+    setHighlight(0);
+  };
+
+  const handleCancel = () => {
+    setOpen(false);
+    editingRef.current = false;
+    setQuery(selected?.label ?? '');
+  };
+
   const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     // Ignore blur caused by focus moving to something inside this component
     if (containerRef.current && e.relatedTarget && containerRef.current.contains(e.relatedTarget as globalThis.Node)) {
@@ -176,7 +170,7 @@ export function SearchableSelect({ options, value, onChange, placeholder, disabl
       setOpen(false);
       editingRef.current = false;
       setQuery(selected?.label ?? '');
-      inputRef.current?.blur();
+      (document.activeElement as HTMLElement | null)?.blur();
     }
   };
 
@@ -218,24 +212,39 @@ export function SearchableSelect({ options, value, onChange, placeholder, disabl
     ))
   );
 
-  const listbox = open && !disabled && (
-    usePortal ? (
-      createPortal(
-        <ul
-          ref={listboxRef}
-          className={clsx(styles.listbox, styles.listboxPortal)}
-          style={coords ? { top: coords.top, left: coords.left, width: coords.width, maxHeight: coords.maxHeight } : undefined}
-          role="listbox"
-        >
-          {listboxBody}
-        </ul>,
-        document.body,
-      )
-    ) : (
-      <ul ref={listboxRef} className={styles.listbox} role="listbox">
+  // Mobile/tablet: focusing the trigger opens a full-screen overlay with its own input,
+  // rather than a small popup anchored under the (soon to be keyboard-obscured) field. The
+  // overlay's input is already at a fixed, fully-visible position, so there's nothing for iOS
+  // Safari to need to scroll into view — sidestepping the drift/scroll bugs a floating popup
+  // anchored under the field ran into.
+  const mobileOverlay = open && !disabled && usePortal && createPortal(
+    <div className={styles.mobileOverlay}>
+      <div className={styles.mobileHeader}>
+        <input
+          autoFocus
+          className={styles.mobileInput}
+          type="text"
+          value={query}
+          placeholder={placeholder}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+          role="combobox"
+          aria-expanded={open}
+          aria-autocomplete="list"
+        />
+        <button type="button" className={styles.mobileCancelBtn} onClick={handleCancel}>Cancel</button>
+      </div>
+      <ul ref={listboxRef} className={styles.mobileListbox} role="listbox">
         {listboxBody}
       </ul>
-    )
+    </div>,
+    document.body,
+  );
+
+  const listbox = open && !disabled && !usePortal && (
+    <ul ref={listboxRef} className={styles.listbox} role="listbox">
+      {listboxBody}
+    </ul>
   );
 
   return (
@@ -248,10 +257,11 @@ export function SearchableSelect({ options, value, onChange, placeholder, disabl
           value={query}
           placeholder={placeholder}
           disabled={disabled}
-          onFocus={handleFocus}
-          onBlur={handleBlur}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
+          readOnly={usePortal}
+          onFocus={usePortal ? handleTriggerFocus : handleFocus}
+          onBlur={usePortal ? undefined : handleBlur}
+          onChange={usePortal ? undefined : handleChange}
+          onKeyDown={usePortal ? undefined : handleKeyDown}
           role="combobox"
           aria-expanded={open}
           aria-autocomplete="list"
@@ -261,6 +271,7 @@ export function SearchableSelect({ options, value, onChange, placeholder, disabl
         )}
       </div>
       {listbox}
+      {mobileOverlay}
     </div>
   );
 }
