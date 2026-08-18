@@ -390,7 +390,8 @@ export function useCanvasRenderer(
       ? new Set<string>()
       : getUnreachableMarkerIds(sectionNodes, building.edges);
 
-    // 5. Nodes
+    // 5. Nodes (markers only — labels are drawn in a separate pass afterward, see
+    // drawNodeLabel, so a node can never visually bury another node's label).
     const drawNode = (node: typeof sectionNodes[number], isPath: boolean) => {
       const { x, y } = toScreen(node.nx * W, node.ny * contentH);
       const overrideMarker = entranceOverrides.get(node.id);
@@ -452,23 +453,28 @@ export function useCanvasRenderer(
         ctx.fillStyle = '#FFD24C';
         ctx.fillText('★', x + 9, y - 8);
       }
+    };
 
-      // Node label — substituted with the marker's label while this node is
-      // impersonating the room it's an entrance of.
+    // Node label — substituted with the marker's label while this node is
+    // impersonating the room it's an entrance of. Drawn in its own pass, after every
+    // node marker, so labels always sit on top instead of being buried by a
+    // later-drawn neighboring node.
+    const drawNodeLabel = (node: typeof sectionNodes[number], isPath: boolean) => {
+      const { x, y } = toScreen(node.nx * W, node.ny * contentH);
+      const overrideMarker = entranceOverrides.get(node.id);
       const displayLabel = overrideMarker?.label || node.label;
-      if (displayLabel) {
-        ctx.font = '12px system-ui, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        const labelW = ctx.measureText(displayLabel).width;
-        const pad = 3;
-        const labelX = x - labelW / 2 - pad;
-        const labelY = y + 12;
-        ctx.fillStyle = 'rgba(0,0,0,0.65)';
-        ctx.fillRect(labelX, labelY, labelW + pad * 2, 16);
-        ctx.fillStyle = isPath ? PATH_COLOR : '#fff';
-        ctx.fillText(displayLabel, x, labelY + 2);
-      }
+      if (!displayLabel) return;
+      ctx.font = '12px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      const labelW = ctx.measureText(displayLabel).width;
+      const pad = 3;
+      const labelX = x - labelW / 2 - pad;
+      const labelY = y + 12;
+      ctx.fillStyle = 'rgba(0,0,0,0.65)';
+      ctx.fillRect(labelX, labelY, labelW + pad * 2, 16);
+      ctx.fillStyle = isPath ? PATH_COLOR : '#fff';
+      ctx.fillText(displayLabel, x, labelY + 2);
     };
 
     if (isPathMode) {
@@ -493,10 +499,24 @@ export function useCanvasRenderer(
       for (const node of sectionNodes) {
         if (pathNodeSet!.has(node.id) && isSignificantNode(node)) drawNode(node, true);
       }
+      // Labels last, above every marker drawn above — dimmed off-path labels keep
+      // their dimmed alpha, on-path labels stay at full opacity.
+      ctx.globalAlpha = NODE_DIM_ALPHA;
+      for (const node of sectionNodes) {
+        if (!pathNodeSet!.has(node.id) && isDimEligible(node)) drawNodeLabel(node, false);
+      }
+      ctx.globalAlpha = 1;
+      for (const node of sectionNodes) {
+        if (pathNodeSet!.has(node.id) && isSignificantNode(node)) drawNodeLabel(node, true);
+      }
     } else {
       for (const node of sectionNodes) {
         if (isCategoryHidden(node)) continue;
         if (!roomsOnly || node.isRoom) drawNode(node, false);
+      }
+      for (const node of sectionNodes) {
+        if (isCategoryHidden(node)) continue;
+        if (!roomsOnly || node.isRoom) drawNodeLabel(node, false);
       }
     }
 
