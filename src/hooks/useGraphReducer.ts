@@ -10,6 +10,18 @@ import { saveImage, getAllImages, deleteImage } from '../utils/imageStore';
 // Action types
 // ---------------------------------------------------------------------------
 
+// A few payloads carry a caller-generated id (ADD_NODE's Node.id, SPLIT_EDGE's
+// newNodeId) instead of letting the reducer call generateId() itself, because the
+// caller needs that id back synchronously — before the dispatch even resolves — to
+// keep using it (e.g. EditorCanvas's path mode chains an edge from the node it just
+// placed, whether that placement dispatched ADD_NODE or SPLIT_EDGE). ADD_EDGE and
+// ADD_EDGE_TYPE don't have that constraint, and the reducer already has to synthesize
+// part of their result from current state that the caller doesn't have — ADD_EDGE can
+// no-op or merge into an existing edge between the same two nodes instead of always
+// creating a new one (see its case below), and ADD_EDGE_TYPE picks the new type's
+// color from whichever custom colors aren't already in use — so it's simplest to let
+// the reducer own id generation there too rather than split the "build this object"
+// work across the call site and the reducer.
 export type Action =
   | { type: 'UPDATE_BUILDING_NAME'; payload: { name: string } }
   | { type: 'ADD_SECTION'; payload: Section }
@@ -340,7 +352,14 @@ export function reducer(state: Building, action: Action): Building {
       return {
         ...state,
         edgeTypes: state.edgeTypes.filter((t) => t.id !== id),
-        edges: state.edges.map((e) => (e.type === id ? { ...e, type: 'walkway' } : e)),
+        edges: state.edges.map((e) => {
+          if (e.type === id) return { ...e, type: 'walkway' };
+          // Don't leave a room-entrance edge's remembered pre-marker type pointing at a
+          // now-deleted type — UNSET_ROOM_MARKER would otherwise fail to find it and
+          // silently fall back to walkway anyway, so do it here where it's explicit.
+          if (e.preEntranceType === id) return { ...e, preEntranceType: 'walkway' };
+          return e;
+        }),
       };
     }
 
@@ -382,7 +401,8 @@ export function reducer(state: Building, action: Action): Building {
         })
         .map((e) => {
           if (e.srcId !== nodeId && e.tgtId !== nodeId) return e;
-          return { ...e, type: ROOM_ENTRANCE_EDGE_TYPE, weight: 0 };
+          if (e.type === ROOM_ENTRANCE_EDGE_TYPE) return e; // already converted — keep its remembered preEntranceType
+          return { ...e, type: ROOM_ENTRANCE_EDGE_TYPE, preEntranceType: e.type, weight: 0 };
         });
       return {
         ...state,
@@ -398,15 +418,22 @@ export function reducer(state: Building, action: Action): Building {
     case 'UNSET_ROOM_MARKER': {
       const { nodeId } = action.payload;
       const nodeIndex = new Map(state.nodes.map((n) => [n.id, n]));
-      const walkway = state.edgeTypes.find((t) => t.id === 'walkway');
+      const typeIndex = new Map(state.edgeTypes.map((t) => [t.id, t]));
       const updatedEdges = state.edges.map((e) => {
         if (e.type !== ROOM_ENTRANCE_EDGE_TYPE || (e.srcId !== nodeId && e.tgtId !== nodeId)) return e;
+        // Restore whatever type this edge had before it became a Room Entrance edge
+        // (see SET_ROOM_MARKER), falling back to walkway if it never had one or that
+        // type was since deleted (DELETE_EDGE_TYPE keeps preEntranceType in sync too).
+        const restoredType = typeIndex.get(e.preEntranceType ?? 'walkway') ?? typeIndex.get('walkway');
         const src = nodeIndex.get(e.srcId);
         const tgt = nodeIndex.get(e.tgtId);
-        if (!src || !tgt || !walkway) return { ...e, type: 'walkway' };
+        if (!src || !tgt || !restoredType) return { ...e, type: 'walkway', preEntranceType: undefined };
         const section = state.sections.find((s) => s.id === src.sectionId);
-        const weight = computeEdgeWeight(walkway, src, tgt, section?.imageW ?? 1, section?.imageH ?? 1, section?.scale ?? 1.0);
-        return { ...e, type: 'walkway', weight };
+        // Cross-section endpoints aren't euclidean-comparable — same caveat as UPDATE_EDGE.
+        const weight = e.crossSection && restoredType.weightMode === 'length'
+          ? e.weight
+          : computeEdgeWeight(restoredType, src, tgt, section?.imageW ?? 1, section?.imageH ?? 1, section?.scale ?? 1.0);
+        return { ...e, type: restoredType.id, preEntranceType: undefined, weight };
       });
       return {
         ...state,

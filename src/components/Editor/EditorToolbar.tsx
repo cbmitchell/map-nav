@@ -100,6 +100,7 @@ export function EditorToolbar({
           )],
           ['node', 'Add Node', '⊕'],
           ['edge', 'Add Edge', '↔'],
+          ...(isMobileOrTablet ? [['pan', 'Pan', '✋'] as [EditorMode, string, ReactNode]] : []),
         ] as [EditorMode, string, ReactNode][]).map(([m, label, icon]) => (
           <button
             key={m}

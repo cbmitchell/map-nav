@@ -4,6 +4,7 @@ import {
   getRoomEntranceIds,
   resolveRoomCandidates,
   getImpersonatingMarker,
+  getUnreachableMarkerIds,
 } from './roomEntrances';
 import type { Node, Edge } from '../types/graph';
 
@@ -54,6 +55,24 @@ describe('resolveRoomCandidates', () => {
 
   it('resolves an unknown id to itself', () => {
     expect(resolveRoomCandidates([], [], 'ghost')).toEqual(['ghost']);
+  });
+});
+
+describe('getUnreachableMarkerIds', () => {
+  it('flags a marker with zero Room Entrance edges', () => {
+    const nodes = [node('M', { isRoom: true, isRoomMarker: true })];
+    expect(getUnreachableMarkerIds(nodes, [])).toEqual(new Set(['M']));
+  });
+
+  it('does not flag a marker with at least one Room Entrance edge', () => {
+    const nodes = [node('M', { isRoom: true, isRoomMarker: true }), node('A')];
+    const edges = [entranceEdge('e1', 'M', 'A')];
+    expect(getUnreachableMarkerIds(nodes, edges)).toEqual(new Set());
+  });
+
+  it('ignores non-marker nodes entirely', () => {
+    const nodes = [node('A', { isRoom: true })];
+    expect(getUnreachableMarkerIds(nodes, [])).toEqual(new Set());
   });
 });
 

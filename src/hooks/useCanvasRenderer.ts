@@ -5,7 +5,7 @@ import type { EditorState } from '../types/editor';
 import { DEFAULT_EDITOR_STATE } from '../types/editor';
 import type { ZoomPanState } from './useZoomPan';
 import { DEFAULT_ZOOM_PAN } from './useZoomPan';
-import { ROOM_ENTRANCE_EDGE_TYPE, getImpersonatingMarker } from '../utils/roomEntrances';
+import { ROOM_ENTRANCE_EDGE_TYPE, getImpersonatingMarker, getUnreachableMarkerIds } from '../utils/roomEntrances';
 
 // ---------------------------------------------------------------------------
 // Edge display helpers (derived from building.edgeTypes at render time)
@@ -386,18 +386,9 @@ export function useCanvasRenderer(
 
     // Editor-only: markers with zero entrances can never be routed to — flag them
     // with a warning ring so the mapmaker notices before a user hits "No route found."
-    const unreachableMarkerIds = new Set<string>();
-    if (!isNavigator) {
-      const markerEntranceCounts = new Map<string, number>();
-      for (const e of building.edges) {
-        if (e.type !== ROOM_ENTRANCE_EDGE_TYPE) continue;
-        markerEntranceCounts.set(e.srcId, (markerEntranceCounts.get(e.srcId) ?? 0) + 1);
-        markerEntranceCounts.set(e.tgtId, (markerEntranceCounts.get(e.tgtId) ?? 0) + 1);
-      }
-      for (const n of sectionNodes) {
-        if (n.isRoomMarker && !markerEntranceCounts.get(n.id)) unreachableMarkerIds.add(n.id);
-      }
-    }
+    const unreachableMarkerIds = isNavigator
+      ? new Set<string>()
+      : getUnreachableMarkerIds(sectionNodes, building.edges);
 
     // 5. Nodes
     const drawNode = (node: typeof sectionNodes[number], isPath: boolean) => {

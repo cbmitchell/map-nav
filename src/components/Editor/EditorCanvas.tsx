@@ -10,7 +10,7 @@ import { useCanvasRenderer } from '../../hooks/useCanvasRenderer';
 import { distanceToSegment, px2norm, closestPointOnSegment } from '../../utils/geometry';
 import { computeEdgeWeight } from '../../utils/pathfinding';
 import { euclideanWeight } from '../../utils/geometry';
-import { ROOM_ENTRANCE_EDGE_TYPE } from '../../utils/roomEntrances';
+import { ROOM_ENTRANCE_EDGE_TYPE, getRoomEntranceIds } from '../../utils/roomEntrances';
 import { useMobile } from '../../hooks/useMobile';
 import { generateId } from '../../utils/id';
 import { getDistinctCategories } from '../../utils/categories';
@@ -218,6 +218,7 @@ export function EditorCanvas({
     if (!canvas) return;
     if (spaceRef.current) { canvas.style.cursor = panRef.current ? 'grabbing' : 'grab'; return; }
     if (esRef.current.mode === 'adjust-image') { canvas.style.cursor = imageDragRef.current ? 'grabbing' : 'grab'; return; }
+    if (esRef.current.mode === 'pan') { canvas.style.cursor = panRef.current ? 'grabbing' : 'grab'; return; }
     if (hoverNodeRef.current) { canvas.style.cursor = 'pointer'; return; }
     const map: Record<string, string> = { select: 'default', node: 'crosshair', edge: 'cell', link: 'crosshair', calibrate: 'crosshair' };
     canvas.style.cursor = map[esRef.current.mode] ?? 'default';
@@ -620,6 +621,13 @@ export function EditorCanvas({
       return;
     }
 
+    // Pan mode — drag always pans the view, no node/edge hit-testing competing for it
+    if (esRef.current.mode === 'pan') {
+      panRef.current = { lastX: screen.x, lastY: screen.y };
+      if (canvasRef.current) canvasRef.current.style.cursor = 'grabbing';
+      return;
+    }
+
     const { x, y } = getContentCoords(e);
     const es = esRef.current;
     const sectionNodes = getSectionNodes();
@@ -829,6 +837,12 @@ export function EditorCanvas({
 
     touchRef.current = { lastX: t.clientX, lastY: t.clientY, lastDist: 0 };
     imageDragRef.current = null;
+
+    // Pan mode — single-finger drag always pans, no node/edge hit-testing or tap dispatch
+    if (esRef.current.mode === 'pan') {
+      lastTapRef.current = null;
+      return;
+    }
 
     // Double-tap detection — fire label editor open if two taps within 300ms/20px
     const now = Date.now();
@@ -1202,9 +1216,7 @@ export function EditorCanvas({
               </div>
             )}
             {labelEditor.isRoomMarker &&
-              !buildingRef.current.edges.some(
-                (e) => e.type === ROOM_ENTRANCE_EDGE_TYPE && (e.srcId === labelEditor.nodeId || e.tgtId === labelEditor.nodeId),
-              ) && (
+              getRoomEntranceIds(buildingRef.current.edges, labelEditor.nodeId).length === 0 && (
                 <div className={popupStyles.popupWarning}>
                   No entrances — this room can't be routed to.
                 </div>

@@ -1,6 +1,6 @@
 import type { EdgeType } from './graph';
 
-export type EditorMode = 'select' | 'node' | 'edge' | 'link' | 'calibrate' | 'adjust-image';
+export type EditorMode = 'select' | 'node' | 'edge' | 'link' | 'calibrate' | 'adjust-image' | 'pan';
 
 export interface EditorState {
   mode: EditorMode;

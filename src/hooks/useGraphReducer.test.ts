@@ -77,3 +77,50 @@ describe('UNSET_ROOM_MARKER', () => {
     expect(next.edges[0].weight).toBe(42);
   });
 });
+
+describe('SET_ROOM_MARKER / UNSET_ROOM_MARKER round trip', () => {
+  it('preserves a non-walkway edge type across marking and unmarking', () => {
+    const sections = [section('s1')];
+    const nodes = [
+      node('m', 's1', { isRoom: true }),
+      node('a', 's1', { isConnector: true }),
+    ];
+    const edges: Edge[] = [{ id: 'e1', srcId: 'm', tgtId: 'a', type: 'stairs', weight: 150, crossSection: false }];
+    const state = building(sections, nodes, edges);
+
+    const marked = reducer(state, { type: 'SET_ROOM_MARKER', payload: { nodeId: 'm' } });
+    expect(marked.edges[0].type).toBe('room-entrance');
+    expect(marked.edges[0].preEntranceType).toBe('stairs');
+
+    const unmarked = reducer(marked, { type: 'UNSET_ROOM_MARKER', payload: { nodeId: 'm' } });
+    expect(unmarked.edges[0].type).toBe('stairs');
+    expect(unmarked.edges[0].weight).toBe(150);
+    expect(unmarked.edges[0].preEntranceType).toBeUndefined();
+  });
+
+  it('DELETE_EDGE_TYPE reassigns a room-entrance edge\'s remembered preEntranceType too', () => {
+    const sections = [section('s1')];
+    const nodes = [
+      node('m', 's1', { isRoom: true }),
+      node('a', 's1', { isConnector: true }),
+    ];
+    const edges: Edge[] = [{ id: 'e1', srcId: 'm', tgtId: 'a', type: 'stairs', weight: 150, crossSection: false }];
+    const state = building(sections, nodes, edges);
+    const marked = reducer(state, { type: 'SET_ROOM_MARKER', payload: { nodeId: 'm' } });
+
+    // Deleting a custom type won't apply to 'stairs' (built-in, can't be deleted), so
+    // fabricate a custom type standing in for what 'stairs' represents here.
+    const customType = { ...DEFAULT_EDGE_TYPES[1], id: 'custom-stairs', isBuiltIn: false };
+    const withCustom: Building = {
+      ...marked,
+      edgeTypes: [...marked.edgeTypes, customType],
+      edges: [{ ...marked.edges[0], preEntranceType: 'custom-stairs' }],
+    };
+
+    const afterDelete = reducer(withCustom, { type: 'DELETE_EDGE_TYPE', payload: { id: 'custom-stairs' } });
+    expect(afterDelete.edges[0].preEntranceType).toBe('walkway');
+
+    const unmarked = reducer(afterDelete, { type: 'UNSET_ROOM_MARKER', payload: { nodeId: 'm' } });
+    expect(unmarked.edges[0].type).toBe('walkway');
+  });
+});

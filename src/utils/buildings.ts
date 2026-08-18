@@ -3,7 +3,9 @@ import type { Section } from '../types/graph';
 export const NO_BUILDING_LABEL = '(No building)';
 
 export function getDistinctBuildings(sections: Section[]): string[] {
-  return [...new Set(sections.map((s) => s.building).filter((b): b is string => !!b))].sort();
+  // Trimmed the same way groupSectionsByBuilding's key is, so "HQ" and "HQ " (trailing
+  // whitespace) collapse to one entry instead of appearing as two distinct buildings.
+  return [...new Set(sections.map((s) => s.building?.trim()).filter((b): b is string => !!b))].sort();
 }
 
 // Groups sections by building (alphabetical; unassigned sections grouped last under

@@ -136,6 +136,10 @@ interface Edge {
   type: EdgeType;
   weight: number;        // computed at creation time; recalculated on node drag or type change
   crossSection: boolean; // true if src and tgt belong to different sections
+  preEntranceType?: EdgeType; // type this edge had before SET_ROOM_MARKER force-converted
+                              // it to 'room-entrance'; restored by UNSET_ROOM_MARKER,
+                              // undefined = restore to walkway. Meaningful only when
+                              // type === 'room-entrance'.
 }
 ```
 
@@ -182,10 +186,10 @@ Action types:
 - `SPLIT_EDGE` — insert a new unlabeled node at a point along an existing edge, replacing it with two edges
 - `ADD_EDGE_TYPE` — add a user-defined custom edge type
 - `UPDATE_EDGE_TYPE` — edit a custom or built-in edge type's name/weight/accessibility (recalculates weight for all edges using that type)
-- `DELETE_EDGE_TYPE` — remove a custom edge type (built-in types cannot be deleted); edges of that type are reassigned to `walkway`
+- `DELETE_EDGE_TYPE` — remove a custom edge type (built-in types cannot be deleted); edges of that type are reassigned to `walkway`, and any edge's `preEntranceType` pointing at the deleted type is reassigned to `walkway` too
 - `CALIBRATE_SECTION` — set `Section.scale` and recalculate all length-based edge weights for that section
-- `SET_ROOM_MARKER` — flag a room node as a marker; for each edge touching it, converts it to a `room-entrance` edge if the other endpoint isn't a room, or deletes it if the other endpoint is a room (lone room or another marker)
-- `UNSET_ROOM_MARKER` — un-flag a marker; its `room-entrance` edges revert to `walkway`, weight recalculated from distance
+- `SET_ROOM_MARKER` — flag a room node as a marker; for each edge touching it, converts it to a `room-entrance` edge (remembering the original type as `preEntranceType`) if the other endpoint isn't a room, or deletes it if the other endpoint is a room (lone room or another marker)
+- `UNSET_ROOM_MARKER` — un-flag a marker; its `room-entrance` edges revert to their remembered `preEntranceType` (or `walkway` if none), weight recalculated for that type
 - `LOAD_BUILDING` — replace entire state (used for import)
 
 ### Persistence: localStorage + IndexedDB
@@ -244,6 +248,7 @@ Hit detection:
 | `edge` | cell | click source node to begin edge; click target node to complete; click empty space to cancel |
 | `link` | crosshair | special mode for cross-section edges — see Cross-section connections below |
 | `calibrate` | crosshair | click two points on the map to define a known real-world distance; entering the distance sets `Section.scale` via `CALIBRATE_SECTION` |
+| `pan` | grab | drag anywhere (including over nodes) to pan the view; no node/edge interaction. Mobile/tablet only — the toolbar button is hidden on desktop (`isMobile \|\| isTablet`), which instead pans via middle-mouse-button drag or Space+drag in any mode |
 
 ### Node-path auto-connect (desktop only)
 

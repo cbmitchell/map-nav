@@ -59,4 +59,9 @@ export interface Edge {
   type: EdgeType;
   weight: number;
   crossSection: boolean;
+  // The type this edge had before one of its endpoints became a room marker and it was
+  // force-converted to 'room-entrance' (see SET_ROOM_MARKER). Restored when the marker
+  // is unmarked (UNSET_ROOM_MARKER); undefined = restore to 'walkway'. Meaningful only
+  // when type === 'room-entrance'.
+  preEntranceType?: EdgeType;
 }
