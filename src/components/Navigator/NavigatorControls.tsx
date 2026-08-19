@@ -8,6 +8,7 @@ import { SearchableSelect } from '../shared/SearchableSelect';
 import type { SearchableSelectOption } from '../shared/SearchableSelect';
 import { getDistinctCategories } from '../../utils/categories';
 import { groupSectionsByBuilding } from '../../utils/buildings';
+import { ROOM_ENTRANCE_EDGE_TYPE } from '../../utils/roomEntrances';
 import styles from './NavigatorControls.module.css';
 
 interface NavigatorControlsProps {
@@ -217,7 +218,7 @@ export function NavigatorControls({
 
   const routeOptionsContent = (
     <div className={styles.typeList}>
-      {building.edgeTypes.map((et) => {
+      {building.edgeTypes.filter((et) => et.id !== ROOM_ENTRANCE_EDGE_TYPE).map((et) => {
         const included = !excludedTypes.has(et.id);
         return (
           <label key={et.id} className={styles.typeRow}>

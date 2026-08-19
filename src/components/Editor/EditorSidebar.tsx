@@ -7,6 +7,7 @@ import type { EdgeTypeDef } from '../../types/graph';
 import { loadPdf, renderPdfPage } from '../../utils/pdf';
 import { generateId } from '../../utils/id';
 import { getDistinctBuildings, groupSectionsByBuilding } from '../../utils/buildings';
+import { ROOM_ENTRANCE_EDGE_TYPE } from '../../utils/roomEntrances';
 import { CollapsibleSection } from '../shared/CollapsibleSection';
 import styles from './EditorSidebar.module.css';
 
@@ -540,7 +541,7 @@ export function EditorSidebar({ building, activeSectionId, onSectionChange, disp
       <div className={styles.divider} />
       <CollapsibleSection title="Edge Types" storageKey="editor-edge-types">
         <div className={styles.crossList}>
-          {building.edgeTypes.map((et) => (
+          {building.edgeTypes.filter((et) => et.id !== ROOM_ENTRANCE_EDGE_TYPE).map((et) => (
             <div key={et.id}>
               {editingEdgeTypeId === et.id ? (
                 <EdgeTypeForm
